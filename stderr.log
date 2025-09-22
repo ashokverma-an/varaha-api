@@ -1,0 +1,498 @@
+Ignoring invalid configuration option passed to Connection: acquireTimeout. This is currently a warning, but in future versions of MySQL2, an error will be thrown if you pass an invalid configuration option to a Connection
+Ignoring invalid configuration option passed to Connection: timeout. This is currently a warning, but in future versions of MySQL2, an error will be thrown if you pass an invalid configuration option to a Connection
+Ignoring invalid configuration option passed to Connection: reconnect. This is currently a warning, but in future versions of MySQL2, an error will be thrown if you pass an invalid configuration option to a Connection
+Database health check failed: Error: Access denied for user 'varaosrc_prc'@'localhost' (using password: YES)
+    at Object.createConnectionPromise [as createConnection] (/home/varaosrc/public_html/api/node_modules/mysql2/promise.js:19:31)
+    at /home/varaosrc/public_html/api/server.js:83:36
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at /home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:280:10)
+    at /home/varaosrc/public_html/api/server.js:60:3 {
+  code: 'ER_ACCESS_DENIED_ERROR',
+  errno: 1045,
+  sqlState: '28000'
+}
+Ignoring invalid configuration option passed to Connection: acquireTimeout. This is currently a warning, but in future versions of MySQL2, an error will be thrown if you pass an invalid configuration option to a Connection
+Ignoring invalid configuration option passed to Connection: timeout. This is currently a warning, but in future versions of MySQL2, an error will be thrown if you pass an invalid configuration option to a Connection
+Ignoring invalid configuration option passed to Connection: reconnect. This is currently a warning, but in future versions of MySQL2, an error will be thrown if you pass an invalid configuration option to a Connection
+Database health check failed: Error: Access denied for user 'varaosrc_prc'@'localhost' (using password: YES)
+    at Object.createConnectionPromise [as createConnection] (/home/varaosrc/public_html/api/node_modules/mysql2/promise.js:19:31)
+    at /home/varaosrc/public_html/api/server.js:83:36
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at /home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:280:10)
+    at /home/varaosrc/public_html/api/server.js:60:3 {
+  code: 'ER_ACCESS_DENIED_ERROR',
+  errno: 1045,
+  sqlState: '28000'
+}
+Ignoring invalid configuration option passed to Connection: acquireTimeout. This is currently a warning, but in future versions of MySQL2, an error will be thrown if you pass an invalid configuration option to a Connection
+Ignoring invalid configuration option passed to Connection: timeout. This is currently a warning, but in future versions of MySQL2, an error will be thrown if you pass an invalid configuration option to a Connection
+Ignoring invalid configuration option passed to Connection: reconnect. This is currently a warning, but in future versions of MySQL2, an error will be thrown if you pass an invalid configuration option to a Connection
+Database health check failed: Error: Access denied for user 'varaosrc_prc'@'localhost' (using password: YES)
+    at Object.createConnectionPromise [as createConnection] (/home/varaosrc/public_html/api/node_modules/mysql2/promise.js:19:31)
+    at /home/varaosrc/public_html/api/server.js:83:36
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at /home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:280:10)
+    at /home/varaosrc/public_html/api/server.js:60:3 {
+  code: 'ER_ACCESS_DENIED_ERROR',
+  errno: 1045,
+  sqlState: '28000'
+}
+Superadmin stats error: Error: Access denied for user 'varaosrc_prc'@'localhost' (using password: YES)
+    at Object.createConnectionPromise [as createConnection] (/home/varaosrc/public_html/api/node_modules/mysql2/promise.js:19:31)
+    at /home/varaosrc/public_html/api/routes/superadmin.js:51:30
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at /home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:280:10)
+    at Function.handle (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:175:3) {
+  code: 'ER_ACCESS_DENIED_ERROR',
+  errno: 1045,
+  sqlState: '28000'
+}
+Superadmin stats error: Error: Access denied for user 'varaosrc_prc'@'localhost' (using password: YES)
+    at Object.createConnectionPromise [as createConnection] (/home/varaosrc/public_html/api/node_modules/mysql2/promise.js:19:31)
+    at /home/varaosrc/public_html/api/routes/superadmin.js:51:30
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at /home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:280:10)
+    at Function.handle (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:175:3) {
+  code: 'ER_ACCESS_DENIED_ERROR',
+  errno: 1045,
+  sqlState: '28000'
+}
+New API Database failed: Access denied for user 'varaosrc_prc'@'localhost' (using password: YES)
+Original SDC Database failed: Access denied for user 'varaosrc_sdc'@'localhost' (using password: YES)
+Superadmin stats error: Error: Access denied for user 'varaosrc_prc'@'localhost' (using password: YES)
+    at Object.createConnectionPromise [as createConnection] (/home/varaosrc/public_html/api/node_modules/mysql2/promise.js:19:31)
+    at /home/varaosrc/public_html/api/routes/superadmin.js:51:30
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at /home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:280:10)
+    at Function.handle (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:175:3) {
+  code: 'ER_ACCESS_DENIED_ERROR',
+  errno: 1045,
+  sqlState: '28000'
+}
+Superadmin patient report error: ReferenceError: DB_COLUMNS is not defined
+    at /home/varaosrc/public_html/api/routes/superadmin.js:264:23
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+Revenue report error: Error: Unknown column 'console.total_scan' in 'SELECT'
+    at PromiseConnection.execute (/home/varaosrc/public_html/api/node_modules/mysql2/lib/promise/connection.js:47:22)
+    at /home/varaosrc/public_html/api/routes/superadmin.js:285:40
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5) {
+  code: 'ER_BAD_FIELD_ERROR',
+  errno: 1054,
+  sql: '\n' +
+    '      SELECT \n' +
+    '        patient_new.cro,\n' +
+    '        patient_new.patient_name,\n' +
+    '        patient_new.age,\n' +
+    '        patient_new.category,\n' +
+    '        patient_new.scan_type,\n' +
+    '        patient_new.amount,\n' +
+    '        patient_new.date,\n' +
+    '        console.number_films,\n' +
+    '        console.number_contrast,\n' +
+    '        console.total_scan,\n' +
+    '        console.issue_cd,\n' +
+    '        console.added_on\n' +
+    '      FROM patient_new \n' +
+    '      JOIN console ON console.c_p_cro = patient_new.cro \n' +
+    "      WHERE STR_TO_DATE(console.added_on, '%Y-%m-%d') BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')\n" +
+    "        AND console.status = 'Complete'\n" +
+    '      ORDER BY console.con_id ASC\n' +
+    '      LIMIT 1000\n' +
+    '    ',
+  sqlState: '42S22',
+  sqlMessage: "Unknown column 'console.total_scan' in 'SELECT'"
+}
+Revenue report error: Error: Unknown column 'console.total_scan' in 'SELECT'
+    at PromiseConnection.execute (/home/varaosrc/public_html/api/node_modules/mysql2/lib/promise/connection.js:47:22)
+    at /home/varaosrc/public_html/api/routes/superadmin.js:285:40
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5) {
+  code: 'ER_BAD_FIELD_ERROR',
+  errno: 1054,
+  sql: '\n' +
+    '      SELECT \n' +
+    '        patient_new.cro,\n' +
+    '        patient_new.patient_name,\n' +
+    '        patient_new.age,\n' +
+    '        patient_new.category,\n' +
+    '        patient_new.scan_type,\n' +
+    '        patient_new.amount,\n' +
+    '        patient_new.date,\n' +
+    '        console.number_films,\n' +
+    '        console.number_contrast,\n' +
+    '        console.total_scan,\n' +
+    '        console.issue_cd,\n' +
+    '        console.added_on\n' +
+    '      FROM patient_new \n' +
+    '      JOIN console ON console.c_p_cro = patient_new.cro \n' +
+    "      WHERE STR_TO_DATE(console.added_on, '%Y-%m-%d') BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')\n" +
+    "        AND console.status = 'Complete'\n" +
+    '      ORDER BY console.con_id ASC\n' +
+    '      LIMIT 1000\n' +
+    '    ',
+  sqlState: '42S22',
+  sqlMessage: "Unknown column 'console.total_scan' in 'SELECT'"
+}
+Revenue report error: Error: Unknown column 'console.total_scan' in 'SELECT'
+    at PromiseConnection.execute (/home/varaosrc/public_html/api/node_modules/mysql2/lib/promise/connection.js:47:22)
+    at /home/varaosrc/public_html/api/routes/superadmin.js:285:40
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5) {
+  code: 'ER_BAD_FIELD_ERROR',
+  errno: 1054,
+  sql: '\n' +
+    '      SELECT \n' +
+    '        patient_new.cro,\n' +
+    '        patient_new.patient_name,\n' +
+    '        patient_new.age,\n' +
+    '        patient_new.category,\n' +
+    '        patient_new.scan_type,\n' +
+    '        patient_new.amount,\n' +
+    '        patient_new.date,\n' +
+    '        console.number_films,\n' +
+    '        console.number_contrast,\n' +
+    '        console.total_scan,\n' +
+    '        console.issue_cd,\n' +
+    '        console.added_on\n' +
+    '      FROM patient_new \n' +
+    '      JOIN console ON console.c_p_cro = patient_new.cro \n' +
+    "      WHERE STR_TO_DATE(console.added_on, '%Y-%m-%d') BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')\n" +
+    "        AND console.status = 'Complete'\n" +
+    '      ORDER BY console.con_id ASC\n' +
+    '      LIMIT 1000\n' +
+    '    ',
+  sqlState: '42S22',
+  sqlMessage: "Unknown column 'console.total_scan' in 'SELECT'"
+}
+Revenue report error: Error: Unknown column 'console.total_scan' in 'SELECT'
+    at PromiseConnection.execute (/home/varaosrc/public_html/api/node_modules/mysql2/lib/promise/connection.js:47:22)
+    at /home/varaosrc/public_html/api/routes/superadmin.js:285:40
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5) {
+  code: 'ER_BAD_FIELD_ERROR',
+  errno: 1054,
+  sql: '\n' +
+    '      SELECT \n' +
+    '        patient_new.cro,\n' +
+    '        patient_new.patient_name,\n' +
+    '        patient_new.age,\n' +
+    '        patient_new.category,\n' +
+    '        patient_new.scan_type,\n' +
+    '        patient_new.amount,\n' +
+    '        patient_new.date,\n' +
+    '        console.number_films,\n' +
+    '        console.number_contrast,\n' +
+    '        console.total_scan,\n' +
+    '        console.issue_cd,\n' +
+    '        console.added_on\n' +
+    '      FROM patient_new \n' +
+    '      JOIN console ON console.c_p_cro = patient_new.cro \n' +
+    "      WHERE STR_TO_DATE(console.added_on, '%Y-%m-%d') BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')\n" +
+    "        AND console.status = 'Complete'\n" +
+    '      ORDER BY console.con_id ASC\n' +
+    '      LIMIT 1000\n' +
+    '    ',
+  sqlState: '42S22',
+  sqlMessage: "Unknown column 'console.total_scan' in 'SELECT'"
+}
+View reports error: Error: Unknown column 'nursing_patient.id' in 'ORDER BY'
+    at PromiseConnection.execute (/home/varaosrc/public_html/api/node_modules/mysql2/lib/promise/connection.js:47:22)
+    at /home/varaosrc/public_html/api/routes/superadmin.js:494:44
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5) {
+  code: 'ER_BAD_FIELD_ERROR',
+  errno: 1054,
+  sql: '\n' +
+    '      SELECT \n' +
+    '        nursing_patient.n_patient_cro as cro,\n' +
+    '        patient_new.patient_name as patient_name,\n' +
+    '        patient_new.amount as amount,\n' +
+    '        patient_new.date as date,\n' +
+    '        doctor.dname as doctor_name,\n' +
+    '        nursing_patient.n_patient_ct as ct_scan,\n' +
+    '        nursing_patient.n_patient_ct_report_date as ct_report_date,\n' +
+    '        nursing_patient.n_patient_ct_remark as ct_remark,\n' +
+    '        nursing_patient.n_patient_x_ray as xray,\n' +
+    '        nursing_patient.n_patient_x_ray_report_date as xray_report_date,\n' +
+    '        nursing_patient.n_patient_x_ray_remark as xray_remark\n' +
+    '      FROM nursing_patient \n' +
+    '      JOIN patient_new ON patient_new.cro = nursing_patient.n_patient_cro\n' +
+    '      LEFT JOIN doctor ON doctor.d_id = patient_new.doctor_name\n' +
+    "      WHERE nursing_patient.n_patient_x_ray = 'yes' \n" +
+    "        AND nursing_patient.n_patient_ct = 'yes'\n" +
+    '      ORDER BY nursing_patient.id DESC\n' +
+    '      LIMIT 1000\n' +
+    '    ',
+  sqlState: '42S22',
+  sqlMessage: "Unknown column 'nursing_patient.id' in 'ORDER BY'"
+}
+View reports error: Error: Unknown column 'nursing_patient.id' in 'ORDER BY'
+    at PromiseConnection.execute (/home/varaosrc/public_html/api/node_modules/mysql2/lib/promise/connection.js:47:22)
+    at /home/varaosrc/public_html/api/routes/superadmin.js:494:44
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5) {
+  code: 'ER_BAD_FIELD_ERROR',
+  errno: 1054,
+  sql: '\n' +
+    '      SELECT \n' +
+    '        nursing_patient.n_patient_cro as cro,\n' +
+    '        patient_new.patient_name as patient_name,\n' +
+    '        patient_new.amount as amount,\n' +
+    '        patient_new.date as date,\n' +
+    '        doctor.dname as doctor_name,\n' +
+    '        nursing_patient.n_patient_ct as ct_scan,\n' +
+    '        nursing_patient.n_patient_ct_report_date as ct_report_date,\n' +
+    '        nursing_patient.n_patient_ct_remark as ct_remark,\n' +
+    '        nursing_patient.n_patient_x_ray as xray,\n' +
+    '        nursing_patient.n_patient_x_ray_report_date as xray_report_date,\n' +
+    '        nursing_patient.n_patient_x_ray_remark as xray_remark\n' +
+    '      FROM nursing_patient \n' +
+    '      JOIN patient_new ON patient_new.cro = nursing_patient.n_patient_cro\n' +
+    '      LEFT JOIN doctor ON doctor.d_id = patient_new.doctor_name\n' +
+    "      WHERE nursing_patient.n_patient_x_ray = 'yes' \n" +
+    "        AND nursing_patient.n_patient_ct = 'yes'\n" +
+    '      ORDER BY nursing_patient.id DESC\n' +
+    '      LIMIT 1000\n' +
+    '    ',
+  sqlState: '42S22',
+  sqlMessage: "Unknown column 'nursing_patient.id' in 'ORDER BY'"
+}
+Pending reports error: Error: Unknown column 'nursing_patient.id' in 'ORDER BY'
+    at PromiseConnection.execute (/home/varaosrc/public_html/api/node_modules/mysql2/lib/promise/connection.js:47:22)
+    at /home/varaosrc/public_html/api/routes/superadmin.js:449:47
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5) {
+  code: 'ER_BAD_FIELD_ERROR',
+  errno: 1054,
+  sql: '\n' +
+    '      SELECT \n' +
+    '        nursing_patient.n_patient_cro as cro,\n' +
+    '        patient_new.patient_name as patient_name,\n' +
+    '        patient_new.amount as amount,\n' +
+    '        patient_new.date as date,\n' +
+    '        doctor.dname as doctor_name,\n' +
+    '        nursing_patient.n_patient_ct as ct_scan,\n' +
+    '        nursing_patient.n_patient_ct_report_date as ct_report_date,\n' +
+    '        nursing_patient.n_patient_ct_remark as ct_remark,\n' +
+    '        nursing_patient.n_patient_x_ray as xray,\n' +
+    '        nursing_patient.n_patient_x_ray_report_date as xray_report_date,\n' +
+    '        nursing_patient.n_patient_x_ray_remark as xray_remark\n' +
+    '      FROM nursing_patient \n' +
+    '      JOIN patient_new ON patient_new.cro = nursing_patient.n_patient_cro\n' +
+    '      LEFT JOIN doctor ON doctor.d_id = patient_new.doctor_name\n' +
+    "      WHERE nursing_patient.n_patient_x_ray = 'no' \n" +
+    "         OR nursing_patient.n_patient_ct = 'no'\n" +
+    '      ORDER BY nursing_patient.id DESC\n' +
+    '      LIMIT 1000\n' +
+    '    ',
+  sqlState: '42S22',
+  sqlMessage: "Unknown column 'nursing_patient.id' in 'ORDER BY'"
+}
+Dashboard stats error: Error: Access denied for user 'varaosrc_prc'@'localhost' (using password: YES)
+    at Object.createConnectionPromise [as createConnection] (/home/varaosrc/public_html/api/node_modules/mysql2/promise.js:19:31)
+    at /home/varaosrc/public_html/api/routes/dashboard.js:54:30
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at /home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:280:10)
+    at Function.handle (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:175:3) {
+  code: 'ER_ACCESS_DENIED_ERROR',
+  errno: 1045,
+  sqlState: '28000'
+}
+Dashboard stats error: Error: Access denied for user 'varaosrc_prc'@'localhost' (using password: YES)
+    at Object.createConnectionPromise [as createConnection] (/home/varaosrc/public_html/api/node_modules/mysql2/promise.js:19:31)
+    at /home/varaosrc/public_html/api/routes/dashboard.js:54:30
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at /home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:280:10)
+    at Function.handle (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:175:3) {
+  code: 'ER_ACCESS_DENIED_ERROR',
+  errno: 1045,
+  sqlState: '28000'
+}
+Dashboard stats error: Error: Access denied for user 'varaosrc_prc'@'localhost' (using password: YES)
+    at Object.createConnectionPromise [as createConnection] (/home/varaosrc/public_html/api/node_modules/mysql2/promise.js:19:31)
+    at /home/varaosrc/public_html/api/routes/dashboard.js:54:30
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at /home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:280:10)
+    at Function.handle (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:175:3) {
+  code: 'ER_ACCESS_DENIED_ERROR',
+  errno: 1045,
+  sqlState: '28000'
+}
+Dashboard stats error: Error: Access denied for user 'varaosrc_prc'@'localhost' (using password: YES)
+    at Object.createConnectionPromise [as createConnection] (/home/varaosrc/public_html/api/node_modules/mysql2/promise.js:19:31)
+    at /home/varaosrc/public_html/api/routes/dashboard.js:54:30
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at /home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:280:10)
+    at Function.handle (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:175:3) {
+  code: 'ER_ACCESS_DENIED_ERROR',
+  errno: 1045,
+  sqlState: '28000'
+}
+Ignoring invalid configuration option passed to Connection: acquireTimeout. This is currently a warning, but in future versions of MySQL2, an error will be thrown if you pass an invalid configuration option to a Connection
+Ignoring invalid configuration option passed to Connection: timeout. This is currently a warning, but in future versions of MySQL2, an error will be thrown if you pass an invalid configuration option to a Connection
+Admin stats error: Error: Access denied for user 'varaosrc_prc'@'localhost' (using password: YES)
+    at Object.createConnectionPromise [as createConnection] (/home/varaosrc/public_html/api/node_modules/mysql2/promise.js:19:31)
+    at /home/varaosrc/public_html/api/routes/admin.js:30:30
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at /home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:280:10)
+    at Function.handle (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:175:3) {
+  code: 'ER_ACCESS_DENIED_ERROR',
+  errno: 1045,
+  sqlState: '28000'
+}
+Ignoring invalid configuration option passed to Connection: acquireTimeout. This is currently a warning, but in future versions of MySQL2, an error will be thrown if you pass an invalid configuration option to a Connection
+Ignoring invalid configuration option passed to Connection: timeout. This is currently a warning, but in future versions of MySQL2, an error will be thrown if you pass an invalid configuration option to a Connection
+Admin stats error: Error: Access denied for user 'varaosrc_prc'@'localhost' (using password: YES)
+    at Object.createConnectionPromise [as createConnection] (/home/varaosrc/public_html/api/node_modules/mysql2/promise.js:19:31)
+    at /home/varaosrc/public_html/api/routes/admin.js:30:30
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at /home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:280:10)
+    at Function.handle (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:175:3) {
+  code: 'ER_ACCESS_DENIED_ERROR',
+  errno: 1045,
+  sqlState: '28000'
+}
+Patient search error: Error: Access denied for user 'varaosrc_prc'@'localhost' (using password: YES)
+    at Object.createConnectionPromise [as createConnection] (/home/varaosrc/public_html/api/node_modules/mysql2/promise.js:19:31)
+    at /home/varaosrc/public_html/api/routes/patients.js:571:30
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at /home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:280:10)
+    at Function.handle (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:175:3) {
+  code: 'ER_ACCESS_DENIED_ERROR',
+  errno: 1045,
+  sqlState: '28000'
+}
+Patient search error: Error: Access denied for user 'varaosrc_prc'@'localhost' (using password: YES)
+    at Object.createConnectionPromise [as createConnection] (/home/varaosrc/public_html/api/node_modules/mysql2/promise.js:19:31)
+    at /home/varaosrc/public_html/api/routes/patients.js:571:30
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at /home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:280:10)
+    at Function.handle (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:175:3) {
+  code: 'ER_ACCESS_DENIED_ERROR',
+  errno: 1045,
+  sqlState: '28000'
+}
+Patient search error: Error: Access denied for user 'varaosrc_prc'@'localhost' (using password: YES)
+    at Object.createConnectionPromise [as createConnection] (/home/varaosrc/public_html/api/node_modules/mysql2/promise.js:19:31)
+    at /home/varaosrc/public_html/api/routes/patients.js:571:30
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at /home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:280:10)
+    at Function.handle (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:175:3) {
+  code: 'ER_ACCESS_DENIED_ERROR',
+  errno: 1045,
+  sqlState: '28000'
+}
+Patient search error: Error: Access denied for user 'varaosrc_prc'@'localhost' (using password: YES)
+    at Object.createConnectionPromise [as createConnection] (/home/varaosrc/public_html/api/node_modules/mysql2/promise.js:19:31)
+    at /home/varaosrc/public_html/api/routes/patients.js:571:30
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at /home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:280:10)
+    at Function.handle (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:175:3) {
+  code: 'ER_ACCESS_DENIED_ERROR',
+  errno: 1045,
+  sqlState: '28000'
+}
+Dashboard stats error: Error: Access denied for user 'varaosrc_prc'@'localhost' (using password: YES)
+    at Object.createConnectionPromise [as createConnection] (/home/varaosrc/public_html/api/node_modules/mysql2/promise.js:19:31)
+    at /home/varaosrc/public_html/api/routes/dashboard.js:54:30
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/home/varaosrc/public_html/api/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/home/varaosrc/public_html/api/node_modules/express/lib/router/layer.js:95:5)
+    at /home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:280:10)
+    at Function.handle (/home/varaosrc/public_html/api/node_modules/express/lib/router/index.js:175:3) {
+  code: 'ER_ACCESS_DENIED_ERROR',
+  errno: 1045,
+  sqlState: '28000'
+}
+Doctor stats error: Error: Access denied for user 'varaosrc_prc'@'localhost' (using password: YES)
+    at Object.createConnectionPromise [as createConnection] (/home/varaosrc/nodevenv/public_html/api/18/lib/node_modules/mysql2/promise.js:19:31)
+    at /home/varaosrc/public_html/api/routes/doctor.js:28:30
+    at Layer.handle [as handle_request] (/home/varaosrc/nodevenv/public_html/api/18/lib/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/varaosrc/nodevenv/public_html/api/18/lib/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/home/varaosrc/nodevenv/public_html/api/18/lib/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/home/varaosrc/nodevenv/public_html/api/18/lib/node_modules/express/lib/router/layer.js:95:5)
+    at /home/varaosrc/nodevenv/public_html/api/18/lib/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/home/varaosrc/nodevenv/public_html/api/18/lib/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/varaosrc/nodevenv/public_html/api/18/lib/node_modules/express/lib/router/index.js:280:10)
+    at Function.handle (/home/varaosrc/nodevenv/public_html/api/18/lib/node_modules/express/lib/router/index.js:175:3) {
+  code: 'ER_ACCESS_DENIED_ERROR',
+  errno: 1045,
+  sqlState: '28000'
+}
