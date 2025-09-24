@@ -38,6 +38,20 @@ router.get('/stats', async (req, res) => {
       'SELECT COUNT(*) as count FROM patient_new WHERE date = ?', [today]
     );
     
+    // Weekly patients (last 7 days)
+    const [weeklyPatients] = await connection.execute(`
+      SELECT COUNT(*) as count 
+      FROM patient_new 
+      WHERE DATE(STR_TO_DATE(date, '%d-%m-%Y')) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+    `);
+    
+    // Monthly patients (last 30 days)
+    const [monthlyPatients] = await connection.execute(`
+      SELECT COUNT(*) as count 
+      FROM patient_new 
+      WHERE DATE(STR_TO_DATE(date, '%d-%m-%Y')) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+    `);
+    
     // Pending reports
     const [pendingReports] = await connection.execute(`
       SELECT COUNT(*) as count 
@@ -46,17 +60,41 @@ router.get('/stats', async (req, res) => {
       WHERE lb.c_status = 0 OR lb.c_status IS NULL
     `);
     
-    // Completed reports
-    const [completedReports] = await connection.execute(`
+    // Completed reports today
+    const [completedToday] = await connection.execute(`
       SELECT COUNT(*) as count 
       FROM lab_banch lb
       WHERE lb.c_status = 1 AND DATE(lb.added_on) = CURDATE()
     `);
     
+    // Total completed reports (last 7 days)
+    const [completedWeek] = await connection.execute(`
+      SELECT COUNT(*) as count 
+      FROM lab_banch lb
+      WHERE lb.c_status = 1 AND DATE(lb.added_on) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+    `);
+    
+    // Total reports
+    const [totalReports] = await connection.execute(`
+      SELECT COUNT(*) as count FROM lab_banch
+    `);
+    
+    // Calculate completion rate
+    const total = pendingReports[0].count + completedWeek[0].count;
+    const completionRate = total > 0 ? Math.round((completedWeek[0].count / total) * 100) : 0;
+    
+    // Average reports per day (based on last 7 days)
+    const avgReportsPerDay = Math.round(completedWeek[0].count / 7);
+    
     res.json({
       todayPatients: todayPatients[0].count,
+      weeklyPatients: weeklyPatients[0].count,
+      monthlyPatients: monthlyPatients[0].count,
       pendingReports: pendingReports[0].count,
-      completedReports: completedReports[0].count
+      completedReports: completedToday[0].count,
+      totalReports: totalReports[0].count,
+      completionRate,
+      avgReportsPerDay
     });
     
   } catch (error) {
@@ -81,35 +119,75 @@ router.get('/stats', async (req, res) => {
 router.get('/pending-patients', async (req, res) => {
   let connection;
   try {
+    const { page = 1, limit = 10, search = '', date = '' } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    
     connection = await mysql.createConnection(dbConfig);
     
-    const [patients] = await connection.execute(`
+    // Build WHERE clause - Match PHP logic exactly
+    let whereClause = 'WHERE (np.n_patient_x_ray = "no" OR np.n_patient_ct = "no")';
+    const queryParams = [];
+    
+    if (search && search.trim()) {
+      const searchTerm = decodeURIComponent(search.trim());
+      whereClause += ' AND (p.cro LIKE ? OR p.patient_name LIKE ?)';
+      queryParams.push(`%${searchTerm}%`, `%${searchTerm}%`);
+    }
+    
+    if (date && date.trim()) {
+      whereClause += ' AND p.date = ?';
+      queryParams.push(date.trim());
+    }
+    
+    // Get total count with filters applied
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM nursing_patient np
+      JOIN patient_new p ON p.cro = np.n_patient_cro
+      LEFT JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
+      ${whereClause}
+    `;
+    
+    const [countResult] = await connection.execute(countQuery, queryParams);
+    const total = countResult[0].total;
+    
+    // Get paginated data - Match PHP columns exactly
+    const dataQuery = `
       SELECT 
         p.*,
-        d.doctor_name,
-        h.hospital_name,
-        s.scan_name,
-        lb.c_status,
-        lb.remark
-      FROM patient_new p
-      LEFT JOIN doctor d ON d.d_id = p.doctor_name
-      LEFT JOIN hospital h ON h.h_id = p.hospital_id
-      LEFT JOIN scan s ON s.scan_id = p.scan_type
-      LEFT JOIN lab_banch lb ON lb.cro_number = p.cro
-      WHERE lb.c_status = 0 OR lb.c_status IS NULL
+        np.n_patient_ct,
+        np.n_patient_ct_report_date,
+        np.n_patient_ct_remark,
+        np.n_patient_x_ray,
+        np.n_patient_x_ray_report_date,
+        np.n_patient_x_ray_remark,
+        csd.doctor_name
+      FROM nursing_patient np
+      JOIN patient_new p ON p.cro = np.n_patient_cro
+      LEFT JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
+      ${whereClause}
       ORDER BY p.patient_id DESC
-      LIMIT 100
-    `);
+      LIMIT ? OFFSET ?
+    `;
+    
+    const [patients] = await connection.execute(dataQuery, [...queryParams, parseInt(limit), offset]);
     
     res.json({
       success: true,
       data: patients,
-      total: patients.length
+      total: total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / parseInt(limit))
     });
     
   } catch (error) {
     console.error('Doctor pending patients error:', error);
-    res.status(500).json({ error: 'Failed to fetch pending patients' });
+    res.status(500).json({ 
+      error: 'Failed to fetch pending patients',
+      details: error.message,
+      stack: error.stack
+    });
   } finally {
     if (connection) await connection.end();
   }
@@ -286,7 +364,7 @@ router.get('/daily-report', async (req, res) => {
       FROM patient_new p
       LEFT JOIN doctor d ON d.d_id = p.doctor_name
       LEFT JOIN hospital h ON h.h_id = p.hospital_id
-      LEFT JOIN scan s ON s.scan_id = p.scan_type
+      LEFT JOIN scan s ON s.s_id = p.scan_type
       LEFT JOIN lab_banch lb ON lb.cro_number = p.cro
       WHERE p.date = ?
       ORDER BY p.patient_id DESC
@@ -839,6 +917,111 @@ router.get('/patient-in-queue', async (req, res) => {
         search: req.query.search,
         limit: req.query.limit
       }
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+/**
+ * @swagger
+ * /doctor/completed-reports:
+ *   get:
+ *     tags: [Doctor]
+ *     summary: Get completed reports
+ *     description: Get list of completed reports for doctor review
+ *     parameters:
+ *       - in: query
+ *         name: from_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - in: query
+ *         name: to_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *     responses:
+ *       200:
+ *         description: List of completed reports
+ */
+router.get('/completed-reports', async (req, res) => {
+  let connection;
+  try {
+    const { from_date, to_date, page = 1, limit = 10, search = '' } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    // Build WHERE clause - Match PHP view_report logic exactly
+    let whereClause = 'WHERE np.n_patient_x_ray = "yes" AND np.n_patient_ct = "yes"';
+    const queryParams = [];
+    
+    if (search && search.trim()) {
+      const searchTerm = decodeURIComponent(search.trim());
+      whereClause += ' AND (p.cro LIKE ? OR p.patient_name LIKE ?)';
+      queryParams.push(`%${searchTerm}%`, `%${searchTerm}%`);
+    }
+    
+    if (from_date && from_date.trim() && to_date && to_date.trim()) {
+      whereClause += ` AND DATE(np.n_patient_ct_report_date) BETWEEN ? AND ?`;
+      queryParams.push(from_date.trim(), to_date.trim());
+    } else if (from_date && from_date.trim()) {
+      whereClause += ` AND DATE(np.n_patient_ct_report_date) >= ?`;
+      queryParams.push(from_date.trim());
+    } else if (to_date && to_date.trim()) {
+      whereClause += ` AND DATE(np.n_patient_ct_report_date) <= ?`;
+      queryParams.push(to_date.trim());
+    }
+    
+    // Get total count with filters applied
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM nursing_patient np
+      JOIN patient_new p ON p.cro = np.n_patient_cro
+      LEFT JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
+      ${whereClause}
+    `;
+    
+    const [countResult] = await connection.execute(countQuery, queryParams);
+    const total = countResult[0].total;
+    
+    // Get paginated data - Match PHP view_report columns exactly
+    const dataQuery = `
+      SELECT 
+        p.*,
+        np.n_patient_ct,
+        np.n_patient_ct_report_date,
+        np.n_patient_ct_remark,
+        np.n_patient_x_ray,
+        np.n_patient_x_ray_report_date,
+        np.n_patient_x_ray_remark,
+        csd.doctor_name
+      FROM nursing_patient np
+      JOIN patient_new p ON p.cro = np.n_patient_cro
+      LEFT JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
+      ${whereClause}
+      ORDER BY p.patient_id DESC
+      LIMIT ? OFFSET ?
+    `;
+    
+    const [reports] = await connection.execute(dataQuery, [...queryParams, parseInt(limit), offset]);
+    
+    res.json({
+      success: true,
+      data: reports,
+      total: total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / parseInt(limit))
+    });
+    
+  } catch (error) {
+    console.error('Doctor completed reports error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch completed reports',
+      details: error.message,
+      stack: error.stack
     });
   } finally {
     if (connection) await connection.end();

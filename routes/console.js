@@ -11,60 +11,72 @@ const dbConfig = {
   connectTimeout: 30000
 };
 
-// Console queue endpoint
+// Console queue - matches PHP query exactly
 router.get('/queue', async (req, res) => {
   let connection;
   try {
-    const { date } = req.query;
-    const selectedDate = date || new Date().toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
+    const { page = 1, limit = 10, search = '' } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
     
     connection = await mysql.createConnection(dbConfig);
     
-    const query = `
-      SELECT 
-        patient_new.patient_id as p_id,
-        patient_new.cro as cro_number,
-        patient_new.patient_name,
-        doctor.dname as dname,
-        hospital.h_name as h_name,
-        COALESCE(patient_new.amount, 0) as amount,
-        patient_new.date,
-        COALESCE(patient_new.age, 0) as age,
-        COALESCE(patient_new.gender, '') as gender,
-        COALESCE(patient_new.contact_number, '') as mobile,
-        COALESCE(patient_new.category, '') as category,
-        COALESCE(patient_new.scan_type, '') as scan_type,
-        COALESCE(patient_new.allot_date, '') as allot_date,
-        'Pending' as status
-      FROM patient_new
-      LEFT JOIN hospital ON hospital.h_id = patient_new.hospital_id
-      LEFT JOIN doctor ON doctor.d_id = patient_new.doctor_name
-      WHERE patient_new.allot_date = ? OR patient_new.date = ?
-      ORDER BY patient_new.patient_id DESC
-      LIMIT 100
+    // Build WHERE clause - Match PHP logic exactly
+    let whereClause = 'WHERE lab_banch.c_status=1 AND DATE(added_on) >= "2023-05-01"';
+    const queryParams = [];
+    
+    if (search && search.trim()) {
+      const searchTerm = decodeURIComponent(search.trim());
+      whereClause += ' AND (lab_banch.cro_number LIKE ? OR patient_new.patient_name LIKE ?)';
+      queryParams.push(`%${searchTerm}%`, `%${searchTerm}%`);
+    }
+    
+    // Get total count with filters applied
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM lab_banch 
+      JOIN patient_new ON patient_new.cro = lab_banch.cro_number
+      ${whereClause}
     `;
     
-    const [patients] = await connection.execute(query, [selectedDate, selectedDate]);
+    const [countResult] = await connection.execute(countQuery, queryParams);
+    const total = countResult[0].total;
+    
+    // Get paginated data - Match PHP columns exactly
+    const dataQuery = `
+      SELECT 
+        lab_banch.*,
+        patient_new.*
+      FROM lab_banch 
+      JOIN patient_new ON patient_new.cro = lab_banch.cro_number
+      ${whereClause}
+      ORDER BY patient_new.p_id DESC
+      LIMIT ? OFFSET ?
+    `;
+    
+    const [patients] = await connection.execute(dataQuery, [...queryParams, parseInt(limit), offset]);
     
     res.json({
       success: true,
       data: patients,
-      total: Array.isArray(patients) ? patients.length : 0
+      total: total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / parseInt(limit))
     });
     
   } catch (error) {
     console.error('Console queue error:', error);
-    res.status(500).json({ error: 'Failed to fetch console queue', details: error.message });
+    res.status(500).json({ 
+      error: 'Failed to fetch console queue data',
+      details: error.message,
+      stack: error.stack
+    });
   } finally {
     if (connection) await connection.end();
   }
 });
 
-// Individual patient console endpoint
+// Get patient details for console
 router.get('/patient/:cro', async (req, res) => {
   let connection;
   try {
@@ -72,82 +84,299 @@ router.get('/patient/:cro', async (req, res) => {
     
     connection = await mysql.createConnection(dbConfig);
     
-    // Get patient data
-    const patientQuery = `
+    // Get patient details with time slot
+    const [patients] = await connection.execute(`
       SELECT 
-        patient_new.patient_id as p_id,
-        patient_new.cro as cro_number,
-        patient_new.patient_name,
-        doctor.dname as dname,
-        hospital.h_name as h_name,
-        COALESCE(patient_new.amount, 0) as amount,
-        patient_new.date,
-        COALESCE(patient_new.age, 0) as age,
-        COALESCE(patient_new.gender, '') as gender,
-        COALESCE(patient_new.contact_number, '') as mobile,
-        COALESCE(patient_new.category, '') as category,
-        COALESCE(patient_new.scan_type, '') as scan_type,
-        COALESCE(patient_new.allot_date, '') as allot_date
-      FROM patient_new
-      LEFT JOIN hospital ON hospital.h_id = patient_new.hospital_id
+        patient_new.*,
+        time_slot2.time_name,
+        doctor.dname as doctor_name
+      FROM patient_new 
+      JOIN time_slot2 ON time_slot2.time_id = patient_new.allot_time 
       LEFT JOIN doctor ON doctor.d_id = patient_new.doctor_name
       WHERE patient_new.cro = ?
-      LIMIT 1
-    `;
+    `, [cro]);
     
-    const [patientResult] = await connection.execute(patientQuery, [cro]);
-    
-    if (patientResult.length === 0) {
+    if (patients.length === 0) {
       return res.status(404).json({ error: 'Patient not found' });
     }
     
-    const patient = patientResult[0];
-    
     // Get scan details
-    if (patient.scan_type) {
-      const scanIds = patient.scan_type.split(',').filter(Boolean);
-      if (scanIds.length > 0) {
-        const placeholders = scanIds.map(() => '?').join(',');
-        const scanQuery = `SELECT s_id, s_name, 'Pending' as status FROM scan WHERE s_id IN (${placeholders})`;
-        const [scans] = await connection.execute(scanQuery, scanIds);
-        patient.scans = scans;
-      } else {
-        patient.scans = [];
-      }
-    } else {
-      patient.scans = [];
-    }
+    const [scans] = await connection.execute(`
+      SELECT 
+        scan_select.*,
+        scan.s_name
+      FROM scan_select 
+      JOIN scan ON scan.s_id = scan_select.scan_id
+      WHERE scan_select.patient_id = ?
+    `, [cro]);
+    
+    // Get console timing info
+    const [consoleData] = await connection.execute(`
+      SELECT * FROM console 
+      WHERE con_id = (SELECT MAX(con_id) FROM console WHERE added_on = CURDATE())
+    `);
     
     res.json({
       success: true,
-      data: patient
+      data: {
+        patient: patients[0],
+        scans: scans,
+        console: consoleData[0] || null
+      }
     });
     
   } catch (error) {
-    console.error('Console patient error:', error);
-    res.status(500).json({ error: 'Failed to fetch patient console data', details: error.message });
+    console.error('Console patient detail error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch patient details',
+      details: error.message,
+      stack: error.stack
+    });
   } finally {
     if (connection) await connection.end();
   }
 });
 
-// Update scan status endpoint
-router.put('/scan-status', async (req, res) => {
+// Update scan status
+router.post('/update-scan-status', async (req, res) => {
   let connection;
   try {
-    const { cro, scanId, status } = req.body;
+    const { scan_id, patient_id, status } = req.body;
     
-    // For now, just return success as we don't have a scan_status table
-    // In a real implementation, you would update a scan_status table
+    connection = await mysql.createConnection(dbConfig);
+    
+    await connection.execute(`
+      UPDATE scan_select 
+      SET status = ? 
+      WHERE scan_id = ? AND patient_id = ?
+    `, [status, scan_id, patient_id]);
+    
+    // Check if all scans are complete
+    const [pendingScans] = await connection.execute(`
+      SELECT COUNT(*) as count 
+      FROM scan_select 
+      WHERE patient_id = ? AND status = 'pending'
+    `, [patient_id]);
+    
+    const allComplete = pendingScans[0].count === 0;
     
     res.json({
       success: true,
-      message: 'Scan status updated successfully'
+      message: 'Scan status updated',
+      allComplete: allComplete
     });
     
   } catch (error) {
-    console.error('Console scan status error:', error);
-    res.status(500).json({ error: 'Failed to update scan status', details: error.message });
+    console.error('Update scan status error:', error);
+    res.status(500).json({ 
+      error: 'Failed to update scan status',
+      details: error.message
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Save console data
+router.post('/save-console', async (req, res) => {
+  let connection;
+  try {
+    const { 
+      cro, 
+      start_time, 
+      stop_time, 
+      status,
+      examination_id,
+      number_scan,
+      number_film,
+      number_contrast,
+      technician_name,
+      nursing_name,
+      issue_cd,
+      remark
+    } = req.body;
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    // Insert console record
+    await connection.execute(`
+      INSERT INTO console (
+        cro_number, start_time, stop_time, status, examination_id,
+        number_scan, number_film, number_contrast, technician_name,
+        nursing_name, issue_cd, remark, added_on
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE())
+    `, [
+      cro, start_time, stop_time, status, examination_id,
+      number_scan, number_film, number_contrast, technician_name,
+      nursing_name, issue_cd, remark
+    ]);
+    
+    res.json({
+      success: true,
+      message: 'Console data saved successfully'
+    });
+    
+  } catch (error) {
+    console.error('Save console data error:', error);
+    res.status(500).json({ 
+      error: 'Failed to save console data',
+      details: error.message
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Console stats
+router.get('/stats', async (req, res) => {
+  let connection;
+  try {
+    connection = await mysql.createConnection(dbConfig);
+    
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Today's patients in console
+    const [todayPatients] = await connection.execute(`
+      SELECT COUNT(*) as count 
+      FROM console 
+      WHERE DATE(added_on) = ?
+    `, [today]);
+    
+    // Completed today
+    const [completedToday] = await connection.execute(`
+      SELECT COUNT(*) as count 
+      FROM console 
+      WHERE DATE(added_on) = ? AND status = 'Complete'
+    `, [today]);
+    
+    // Pending queue
+    const [pendingQueue] = await connection.execute(`
+      SELECT COUNT(*) as count 
+      FROM lab_banch 
+      WHERE c_status = 1 AND DATE(added_on) >= '2023-05-01'
+    `);
+    
+    // Total processed
+    const [totalProcessed] = await connection.execute(`
+      SELECT COUNT(*) as count 
+      FROM console
+    `);
+    
+    res.json({
+      todayPatients: todayPatients[0].count,
+      completedToday: completedToday[0].count,
+      pendingQueue: pendingQueue[0].count,
+      totalProcessed: totalProcessed[0].count
+    });
+    
+  } catch (error) {
+    console.error('Console stats error:', error);
+    res.status(500).json({ error: 'Failed to fetch console stats' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Daily report
+router.get('/daily-report', async (req, res) => {
+  let connection;
+  try {
+    const { date } = req.query;
+    const reportDate = date || new Date().toISOString().split('T')[0];
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    const [reports] = await connection.execute(`
+      SELECT 
+        console.*,
+        patient_new.patient_name,
+        patient_new.pre
+      FROM console
+      JOIN patient_new ON patient_new.cro = console.cro_number
+      WHERE DATE(console.added_on) = ?
+      ORDER BY console.con_id DESC
+    `, [reportDate]);
+    
+    res.json({
+      success: true,
+      data: reports,
+      date: reportDate,
+      total: reports.length
+    });
+    
+  } catch (error) {
+    console.error('Console daily report error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch daily report',
+      details: error.message
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Console queue after - matches PHP index-after.php query exactly
+router.get('/queue-after', async (req, res) => {
+  let connection;
+  try {
+    const { page = 1, limit = 10, search = '' } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    // Build WHERE clause - Match PHP logic exactly
+    let whereClause = 'WHERE lab_banch.c_status=1 AND DATE(added_on) >= "2023-06-01"';
+    const queryParams = [];
+    
+    if (search && search.trim()) {
+      const searchTerm = decodeURIComponent(search.trim());
+      whereClause += ' AND (lab_banch.cro_number LIKE ? OR patient_new.patient_name LIKE ?)';
+      queryParams.push(`%${searchTerm}%`, `%${searchTerm}%`);
+    }
+    
+    // Get total count with filters applied
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM lab_banch 
+      JOIN patient_new ON patient_new.cro = lab_banch.cro_number
+      ${whereClause}
+    `;
+    
+    const [countResult] = await connection.execute(countQuery, queryParams);
+    const total = countResult[0].total;
+    
+    // Get paginated data - Match PHP columns exactly
+    const dataQuery = `
+      SELECT 
+        lab_banch.*,
+        patient_new.*
+      FROM lab_banch 
+      JOIN patient_new ON patient_new.cro = lab_banch.cro_number
+      ${whereClause}
+      ORDER BY lab_banch.cro_number DESC
+      LIMIT ? OFFSET ?
+    `;
+    
+    const [patients] = await connection.execute(dataQuery, [...queryParams, parseInt(limit), offset]);
+    
+    res.json({
+      success: true,
+      data: patients,
+      total: total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / parseInt(limit))
+    });
+    
+  } catch (error) {
+    console.error('Console queue after error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch console queue after data',
+      details: error.message,
+      stack: error.stack
+    });
+  } finally {
+    if (connection) await connection.end();
   }
 });
 
