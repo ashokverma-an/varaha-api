@@ -69,7 +69,18 @@ router.get('/queue', async (req, res) => {
     res.status(500).json({ 
       error: 'Failed to fetch console queue data',
       details: error.message,
-      stack: error.stack
+      stack: error.stack,
+      query: req.query,
+      dbConfig: {
+        host: dbConfig.host,
+        user: dbConfig.user,
+        database: dbConfig.database,
+        port: dbConfig.port
+      },
+      sqlError: error.code,
+      errno: error.errno,
+      sqlState: error.sqlState,
+      sqlMessage: error.sqlMessage
     });
   } finally {
     if (connection) await connection.end();
@@ -110,11 +121,12 @@ router.get('/patient/:cro', async (req, res) => {
       WHERE scan_select.patient_id = ?
     `, [cro]);
     
-    // Get console timing info
+    // Get console timing info with Asia/Calcutta timezone
+    const currentDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Calcutta' });
     const [consoleData] = await connection.execute(`
       SELECT * FROM console 
-      WHERE con_id = (SELECT MAX(con_id) FROM console WHERE added_on = CURDATE())
-    `);
+      WHERE con_id = (SELECT MAX(con_id) FROM console WHERE added_on = ?)
+    `, [currentDate]);
     
     res.json({
       success: true,
@@ -130,7 +142,18 @@ router.get('/patient/:cro', async (req, res) => {
     res.status(500).json({ 
       error: 'Failed to fetch patient details',
       details: error.message,
-      stack: error.stack
+      stack: error.stack,
+      params: req.params,
+      dbConfig: {
+        host: dbConfig.host,
+        user: dbConfig.user,
+        database: dbConfig.database,
+        port: dbConfig.port
+      },
+      sqlError: error.code,
+      errno: error.errno,
+      sqlState: error.sqlState,
+      sqlMessage: error.sqlMessage
     });
   } finally {
     if (connection) await connection.end();
@@ -170,7 +193,19 @@ router.post('/update-scan-status', async (req, res) => {
     console.error('Update scan status error:', error);
     res.status(500).json({ 
       error: 'Failed to update scan status',
-      details: error.message
+      details: error.message,
+      stack: error.stack,
+      body: req.body,
+      dbConfig: {
+        host: dbConfig.host,
+        user: dbConfig.user,
+        database: dbConfig.database,
+        port: dbConfig.port
+      },
+      sqlError: error.code,
+      errno: error.errno,
+      sqlState: error.sqlState,
+      sqlMessage: error.sqlMessage
     });
   } finally {
     if (connection) await connection.end();
@@ -198,17 +233,18 @@ router.post('/save-console', async (req, res) => {
     
     connection = await mysql.createConnection(dbConfig);
     
-    // Insert console record
+    // Insert console record with Asia/Calcutta timezone
+    const currentDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Calcutta' });
     await connection.execute(`
       INSERT INTO console (
         cro_number, start_time, stop_time, status, examination_id,
         number_scan, number_film, number_contrast, technician_name,
         nursing_name, issue_cd, remark, added_on
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE())
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       cro, start_time, stop_time, status, examination_id,
       number_scan, number_film, number_contrast, technician_name,
-      nursing_name, issue_cd, remark
+      nursing_name, issue_cd, remark, currentDate
     ]);
     
     res.json({
@@ -220,7 +256,19 @@ router.post('/save-console', async (req, res) => {
     console.error('Save console data error:', error);
     res.status(500).json({ 
       error: 'Failed to save console data',
-      details: error.message
+      details: error.message,
+      stack: error.stack,
+      body: req.body,
+      dbConfig: {
+        host: dbConfig.host,
+        user: dbConfig.user,
+        database: dbConfig.database,
+        port: dbConfig.port
+      },
+      sqlError: error.code,
+      errno: error.errno,
+      sqlState: error.sqlState,
+      sqlMessage: error.sqlMessage
     });
   } finally {
     if (connection) await connection.end();
@@ -233,7 +281,8 @@ router.get('/stats', async (req, res) => {
   try {
     connection = await mysql.createConnection(dbConfig);
     
-    const today = new Date().toISOString().split('T')[0];
+    // Use Asia/Calcutta timezone like PHP
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Calcutta' });
     
     // Today's patients in console
     const [todayPatients] = await connection.execute(`
@@ -271,7 +320,21 @@ router.get('/stats', async (req, res) => {
     
   } catch (error) {
     console.error('Console stats error:', error);
-    res.status(500).json({ error: 'Failed to fetch console stats' });
+    res.status(500).json({ 
+      error: 'Failed to fetch console stats',
+      details: error.message,
+      stack: error.stack,
+      dbConfig: {
+        host: dbConfig.host,
+        user: dbConfig.user,
+        database: dbConfig.database,
+        port: dbConfig.port
+      },
+      sqlError: error.code,
+      errno: error.errno,
+      sqlState: error.sqlState,
+      sqlMessage: error.sqlMessage
+    });
   } finally {
     if (connection) await connection.end();
   }
@@ -282,7 +345,8 @@ router.get('/daily-report', async (req, res) => {
   let connection;
   try {
     const { date } = req.query;
-    const reportDate = date || new Date().toISOString().split('T')[0];
+    // Use Asia/Calcutta timezone like PHP
+    const reportDate = date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Calcutta' });
     
     connection = await mysql.createConnection(dbConfig);
     
@@ -308,7 +372,19 @@ router.get('/daily-report', async (req, res) => {
     console.error('Console daily report error:', error);
     res.status(500).json({ 
       error: 'Failed to fetch daily report',
-      details: error.message
+      details: error.message,
+      stack: error.stack,
+      query: req.query,
+      dbConfig: {
+        host: dbConfig.host,
+        user: dbConfig.user,
+        database: dbConfig.database,
+        port: dbConfig.port
+      },
+      sqlError: error.code,
+      errno: error.errno,
+      sqlState: error.sqlState,
+      sqlMessage: error.sqlMessage
     });
   } finally {
     if (connection) await connection.end();
@@ -373,7 +449,18 @@ router.get('/queue-after', async (req, res) => {
     res.status(500).json({ 
       error: 'Failed to fetch console queue after data',
       details: error.message,
-      stack: error.stack
+      stack: error.stack,
+      query: req.query,
+      dbConfig: {
+        host: dbConfig.host,
+        user: dbConfig.user,
+        database: dbConfig.database,
+        port: dbConfig.port
+      },
+      sqlError: error.code,
+      errno: error.errno,
+      sqlState: error.sqlState,
+      sqlMessage: error.sqlMessage
     });
   } finally {
     if (connection) await connection.end();
