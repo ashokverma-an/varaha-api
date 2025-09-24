@@ -3,12 +3,12 @@ const mysql = require('mysql2/promise');
 const router = express.Router();
 
 const dbConfig = {
-  host: process.env.DB_HOST || '198.54.121.225',
-      user: process.env.DB_USER || 'varaosrc_api_user',
-      password: process.env.DB_PASSWORD || 'Akshay!@#2025',
-      database: process.env.DB_NAME || 'varaosrc_hospital_api',
-      port: parseInt(process.env.DB_PORT || '3306'),
-      connectTimeout: 30000
+  host: 'localhost',
+  user: 'varaosrc_prc',
+  password: 'PRC!@#456&*(',
+  database: 'varaosrc_hospital_management',
+  port: 3306,
+  connectTimeout: 30000
 };
 
 /**
@@ -302,6 +302,544 @@ router.get('/daily-report', async (req, res) => {
   } catch (error) {
     console.error('Doctor daily report error:', error);
     res.status(500).json({ error: 'Failed to fetch daily report' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+/**
+ * @swagger
+ * /doctor/corridor-list:
+ *   get:
+ *     tags: [Doctor]
+ *     summary: Get corridor list
+ *     description: Get list of corridor data for doctor
+ *     responses:
+ *       200:
+ *         description: Corridor list data
+ */
+router.get('/corridor-list', async (req, res) => {
+  let connection;
+  try {
+    connection = await mysql.createConnection(dbConfig);
+    
+    const [corridorData] = await connection.execute(`
+      SELECT 
+        c_id,
+        cro_number,
+        n_status,
+        added
+      FROM coridor
+      ORDER BY added DESC
+      LIMIT 100
+    `);
+    
+    res.json({
+      success: true,
+      data: corridorData
+    });
+    
+  } catch (error) {
+    console.error('Corridor list error:', error);
+    res.status(500).json({ error: 'Failed to fetch corridor list' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+/**
+ * @swagger
+ * /doctor/ct-scan-doctors:
+ *   get:
+ *     tags: [Doctor]
+ *     summary: Get CT scan doctors list
+ *     description: Get list of CT scan doctors
+ *     responses:
+ *       200:
+ *         description: CT scan doctors list
+ */
+router.get('/ct-scan-doctors', async (req, res) => {
+  let connection;
+  try {
+    connection = await mysql.createConnection(dbConfig);
+    
+    const [doctors] = await connection.execute(`
+      SELECT 
+        id as d_id,
+        doctor_name
+      FROM ct_scan_doctor
+      ORDER BY id DESC
+    `);
+    
+    res.json({
+      success: true,
+      data: doctors
+    });
+    
+  } catch (error) {
+    console.error('CT scan doctors list error:', error);
+    res.status(500).json({ error: 'Failed to fetch CT scan doctors' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+/**
+ * @swagger
+ * /doctor/ct-scan-doctors:
+ *   post:
+ *     tags: [Doctor]
+ *     summary: Add CT scan doctor
+ *     description: Add new CT scan doctor
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [doctor_name]
+ *             properties:
+ *               doctor_name:
+ *                 type: string
+ *               specialization:
+ *                 type: string
+ *               mobile:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               address:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Doctor added successfully
+ */
+router.post('/ct-scan-doctors', async (req, res) => {
+  let connection;
+  try {
+    const { doctor_name } = req.body;
+    
+    if (!doctor_name) {
+      return res.status(400).json({ error: 'Doctor name is required' });
+    }
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    const [result] = await connection.execute(`
+      INSERT INTO ct_scan_doctor (doctor_name)
+      VALUES (?)
+    `, [doctor_name]);
+    
+    res.status(201).json({
+      success: true,
+      message: 'Doctor added successfully',
+      doctor_id: result.insertId
+    });
+    
+  } catch (error) {
+    console.error('Add CT scan doctor error:', error);
+    res.status(500).json({ error: 'Failed to add doctor' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+/**
+ * @swagger
+ * /doctor/ct-scan-doctors/{id}:
+ *   put:
+ *     tags: [Doctor]
+ *     summary: Update CT scan doctor
+ *     description: Update CT scan doctor details
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               doctor_name:
+ *                 type: string
+ *               specialization:
+ *                 type: string
+ *               mobile:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               address:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Doctor updated successfully
+ */
+router.put('/ct-scan-doctors/:id', async (req, res) => {
+  let connection;
+  try {
+    const { id } = req.params;
+    const { doctor_name } = req.body;
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    const [result] = await connection.execute(`
+      UPDATE ct_scan_doctor 
+      SET doctor_name = ?
+      WHERE id = ?
+    `, [doctor_name, id]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Doctor not found' });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Doctor updated successfully'
+    });
+    
+  } catch (error) {
+    console.error('Update CT scan doctor error:', error);
+    res.status(500).json({ error: 'Failed to update doctor' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+/**
+ * @swagger
+ * /doctor/ct-scan-doctors/{id}:
+ *   delete:
+ *     tags: [Doctor]
+ *     summary: Delete CT scan doctor
+ *     description: Delete CT scan doctor
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Doctor deleted successfully
+ */
+router.delete('/ct-scan-doctors/:id', async (req, res) => {
+  let connection;
+  try {
+    const { id } = req.params;
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    const [result] = await connection.execute('DELETE FROM ct_scan_doctor WHERE id = ?', [id]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Doctor not found' });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Doctor deleted successfully'
+    });
+    
+  } catch (error) {
+    console.error('Delete CT scan doctor error:', error);
+    res.status(500).json({ error: 'Failed to delete doctor' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+/**
+ * @swagger
+ * /doctor/patient-in-queue:
+ *   get:
+ *     tags: [Doctor]
+ *     summary: Get patient in queue
+ *     description: Get paginated list of patients in queue with examination_id != 0
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *     responses:
+ *       200:
+ *         description: Patient in queue data
+ */
+/**
+ * @swagger
+ * /doctor/nursing/{cro}:
+ *   get:
+ *     tags: [Doctor]
+ *     summary: Get nursing patient details
+ *     description: Get detailed nursing information for a patient by CRO
+ *     parameters:
+ *       - in: path
+ *         name: cro
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Nursing patient details
+ */
+router.get('/nursing/:cro', async (req, res) => {
+  let connection;
+  try {
+    const { cro } = req.params;
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    // Get patient details with nursing data
+    const [patients] = await connection.execute(`
+      SELECT 
+        patient_new.*,
+        nursing_patient.*,
+        ct_scan_doctor.doctor_name as ct_doctor_name
+      FROM patient_new 
+      LEFT JOIN nursing_patient ON patient_new.cro = nursing_patient.n_patient_cro 
+      LEFT JOIN ct_scan_doctor ON nursing_patient.ct_scan_doctor_id = ct_scan_doctor.id 
+      WHERE patient_new.cro = ?
+    `, [cro]);
+    
+    if (patients.length === 0) {
+      return res.status(404).json({ 
+        error: 'Patient not found',
+        cro: req.params.cro,
+        query: `SELECT patient_new.*, nursing_patient.*, ct_scan_doctor.doctor_name as ct_doctor_name FROM patient_new LEFT JOIN nursing_patient ON patient_new.cro = nursing_patient.n_patient_cro LEFT JOIN ct_scan_doctor ON nursing_patient.ct_scan_doctor_id = ct_scan_doctor.id WHERE patient_new.cro = '${cro}'`
+      });
+    }
+    
+    const patient = patients[0];
+    
+    // Get scan details
+    const scanIds = patient.scan_type ? patient.scan_type.split(',') : [];
+    const scans = [];
+    
+    for (const scanId of scanIds) {
+      if (scanId.trim()) {
+        const [scanResult] = await connection.execute(
+          'SELECT * FROM scan WHERE s_id = ?', [scanId.trim()]
+        );
+        if (scanResult.length > 0) {
+          scans.push(scanResult[0]);
+        }
+      }
+    }
+    
+    // Get all CT scan doctors
+    const [doctors] = await connection.execute('SELECT * FROM ct_scan_doctor');
+    
+    res.json({
+      success: true,
+      data: {
+        patient,
+        scans,
+        doctors
+      }
+    });
+    
+  } catch (error) {
+    console.error('Nursing patient detail error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch nursing patient details',
+      details: error.message,
+      stack: error.stack,
+      cro: req.params.cro,
+      query: req.query
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+/**
+ * @swagger
+ * /doctor/save-nursing:
+ *   post:
+ *     tags: [Doctor]
+ *     summary: Save nursing data
+ *     description: Save or update nursing patient data
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [cro]
+ *             properties:
+ *               cro:
+ *                 type: string
+ *               ct_scan_doctor_id:
+ *                 type: integer
+ *               n_patient_ct:
+ *                 type: string
+ *               n_patient_ct_report_date:
+ *                 type: string
+ *               n_patient_ct_remark:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Nursing data saved successfully
+ */
+router.post('/save-nursing', async (req, res) => {
+  let connection;
+  try {
+    const { 
+      cro, 
+      ct_scan_doctor_id, 
+      n_patient_ct, 
+      n_patient_ct_report_date, 
+      n_patient_ct_remark,
+      n_patient_x_ray,
+      n_patient_x_ray_report_date,
+      n_patient_x_ray_remark
+    } = req.body;
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    // Check if nursing record exists
+    const [existing] = await connection.execute(
+      'SELECT * FROM nursing_patient WHERE n_patient_cro = ?', [cro]
+    );
+    
+    if (existing.length > 0) {
+      // Update existing record
+      await connection.execute(`
+        UPDATE nursing_patient 
+        SET ct_scan_doctor_id = ?, n_patient_ct = ?, n_patient_ct_report_date = ?, n_patient_ct_remark = ?,
+            n_patient_x_ray = ?, n_patient_x_ray_report_date = ?, n_patient_x_ray_remark = ?
+        WHERE n_patient_cro = ?
+      `, [
+        ct_scan_doctor_id || null, 
+        n_patient_ct, 
+        n_patient_ct_report_date || null, 
+        n_patient_ct_remark,
+        n_patient_x_ray,
+        n_patient_x_ray_report_date || null,
+        n_patient_x_ray_remark,
+        cro
+      ]);
+    } else {
+      // Insert new record
+      await connection.execute(`
+        INSERT INTO nursing_patient (
+          n_patient_cro, ct_scan_doctor_id, n_patient_ct, n_patient_ct_report_date, n_patient_ct_remark,
+          n_patient_x_ray, n_patient_x_ray_report_date, n_patient_x_ray_remark
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        cro, 
+        ct_scan_doctor_id || null, 
+        n_patient_ct, 
+        n_patient_ct_report_date || null, 
+        n_patient_ct_remark,
+        n_patient_x_ray,
+        n_patient_x_ray_report_date || null,
+        n_patient_x_ray_remark
+      ]);
+    }
+    
+    res.json({
+      success: true,
+      message: 'Nursing data saved successfully'
+    });
+    
+  } catch (error) {
+    console.error('Save nursing data error:', error);
+    res.status(500).json({ 
+      error: 'Failed to save nursing data',
+      details: error.message,
+      stack: error.stack,
+      body: req.body
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+router.get('/patient-in-queue', async (req, res) => {
+  let connection;
+  try {
+    const { page = 1, search = '', limit = 10 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    // Get total records
+    let totalQuery = `
+      SELECT COUNT(*) AS total FROM coridor 
+      JOIN patient_new ON patient_new.cro = coridor.cro_number 
+      WHERE patient_new.examination_id != 0
+    `;
+    
+    const queryParams = [];
+    if (search) {
+      totalQuery += ` AND coridor.cro_number LIKE ?`;
+      queryParams.push(`%${search}%`);
+    }
+    
+    const [totalResult] = await connection.execute(totalQuery, queryParams);
+    const totalRecords = totalResult[0].total;
+    const totalPages = Math.ceil(totalRecords / parseInt(limit));
+    
+    // Get paginated data
+    let dataQuery = `
+      SELECT 
+        coridor.c_id,
+        coridor.cro_number,
+        patient_new.patient_name,
+        COALESCE(patient_new.pre, '') as pre,
+        patient_new.allot_date,
+        patient_new.examination_id,
+        coridor.added
+      FROM coridor 
+      JOIN patient_new ON patient_new.cro = coridor.cro_number 
+      WHERE patient_new.examination_id != 0
+    `;
+    
+    const dataParams = [];
+    if (search) {
+      dataQuery += ` AND coridor.cro_number LIKE ?`;
+      dataParams.push(`%${search}%`);
+    }
+    
+    dataQuery += ` ORDER BY coridor.added DESC LIMIT ? OFFSET ?`;
+    dataParams.push(parseInt(limit), offset);
+    
+    const [patients] = await connection.execute(dataQuery, dataParams);
+    
+    res.json({
+      success: true,
+      data: patients,
+      totalPages,
+      currentPage: parseInt(page),
+      total: totalRecords
+    });
+    
+  } catch (error) {
+    console.error('Patient in queue error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch patient in queue data', 
+      details: error.message,
+      stack: error.stack,
+      query: {
+        page: req.query.page,
+        search: req.query.search,
+        limit: req.query.limit
+      }
+    });
   } finally {
     if (connection) await connection.end();
   }
