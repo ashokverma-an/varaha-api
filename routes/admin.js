@@ -242,21 +242,20 @@ router.get('/stats', async (req, res) => {
   try {
     connection = await mysql.createConnection(dbConfig);
     
-    // Use today's date in dd-mm-yyyy format (same as PHP)
+    // ✅ Use today's date in dd-mm-yyyy format (dash, same as DB)
     const now = new Date();
-    const calcuttaTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Calcutta"}));
-    const d = calcuttaTime.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: '2-digit', 
-      year: 'numeric'
-    });
+    const calcuttaTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Calcutta" }));
+    const dd = String(calcuttaTime.getDate()).padStart(2, "0");
+    const mm = String(calcuttaTime.getMonth() + 1).padStart(2, "0"); // Month is 0-based
+    const yyyy = calcuttaTime.getFullYear();
+    const d = `${dd}-${mm}-${yyyy}`;
     
-    // 1. Today's transactions: SELECT * from today_transeciton where added_on = '$d'
+    // 1. Today's transactions
     const [transactionResults] = await connection.execute(
       'SELECT withdraw, r_amount, d_amount FROM today_transeciton WHERE added_on = ?', [d]
     );
     
-    // 2. Today's patient count and total scans: SELECT * from patient_new where date = '$d'
+    // 2. Today's patient count and total scans
     const [patientResults] = await connection.execute(
       'SELECT COUNT(*) as count, SUM(total_scan) as total_scans FROM patient_new WHERE date = ?', [d]
     );
@@ -269,19 +268,20 @@ router.get('/stats', async (req, res) => {
     let w = 0; // withdraw
     
     transactionResults.forEach(r => {
-      w = w + parseFloat(r.withdraw || 0);
-      c = c + parseFloat(r.r_amount || 0);
-      d_amt = d_amt + parseFloat(r.d_amount || 0);
+      w += parseFloat(r.withdraw || 0);
+      c += parseFloat(r.r_amount || 0);
+      d_amt += parseFloat(r.d_amount || 0);
     });
     
     const h = c - d_amt - w; // cash in hand
     
     res.json({
+      todayDate: d,              // show date for debugging
       totalPatients: totalScans, // Patient Registered (total scans)
       todayPatients: patientCount, // Total MRI (patient count)
-      totalRevenue: c, // Received Amount
-      todayRevenue: d_amt, // Due Amount
-      todayWithdraw: w, // Withdraw
+      totalRevenue: c,           // Received Amount
+      todayRevenue: d_amt,       // Due Amount
+      todayWithdraw: w,          // Withdraw
       cashInHand: h <= 0 ? 0 : h // Cash In Hand
     });
     
@@ -295,7 +295,6 @@ router.get('/stats', async (req, res) => {
     if (connection) await connection.end();
   }
 });
-
 // Patient create endpoint
 router.post('/patients', async (req, res) => {
   let connection;

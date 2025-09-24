@@ -110,66 +110,69 @@ const DB_COLUMNS = {
  *                   type: number
  *                   example: 6500.00
  */
-router.get('/stats', async (req, res) => {
+router.get("/stats", async (req, res) => {
   let connection;
   try {
     connection = await mysql.createConnection(dbConfig);
-    
-    // Use today's date in dd-mm-yyyy format
+
+    // Format today's date as dd-mm-yyyy (with dash)
     const now = new Date();
-    const calcuttaTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Calcutta"}));
-    const d = calcuttaTime.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: '2-digit', 
-      year: 'numeric'
-    });
-    
-    // Exact same queries as superadmin/blank.php
-    
-    // 1. Total Amount for today: SELECT SUM(amount) FROM patient_new WHERE date = '$d'
+    const calcuttaTime = new Date(
+      now.toLocaleString("en-US", { timeZone: "Asia/Calcutta" })
+    );
+
+    const dd = String(calcuttaTime.getDate()).padStart(2, "0");
+    const mm = String(calcuttaTime.getMonth() + 1).padStart(2, "0"); // Month is 0-based
+    const yyyy = calcuttaTime.getFullYear();
+    const d = `${dd}-${mm}-${yyyy}`; // --> "09-02-2023"
+
+    // 1. Total Amount for today
     const [totalAmountResult] = await connection.execute(
-      'SELECT SUM(amount) as total FROM patient_new WHERE date = ?', [d]
+      "SELECT SUM(amount) as total FROM patient_new WHERE date = ?",
+      [d]
     );
     const totalAmount = parseFloat(totalAmountResult[0]?.total || 0);
-    
-    // 2. Today's transactions: SELECT * from today_transeciton where added_on = '$d'
+
+    // 2. Today's transactions
     const [transactionResults] = await connection.execute(
-      'SELECT withdraw, r_amount, d_amount FROM today_transeciton WHERE added_on = ?', [d]
+      "SELECT withdraw, r_amount, d_amount FROM today_transeciton WHERE added_on = ?",
+      [d]
     );
-    
-    // 3. Today's patient count: SELECT * from patient_new where date = '$d'
+
+    // 3. Today's patient count
     const [patientResults] = await connection.execute(
-      'SELECT COUNT(*) as count, SUM(total_scan) as total_scans FROM patient_new WHERE date = ?', [d]
+      "SELECT COUNT(*) as count, SUM(total_scan) as total_scans FROM patient_new WHERE date = ?",
+      [d]
     );
     const count = patientResults[0]?.count || 0;
-    
-    // Exact same PHP logic
+
+    // Same PHP logic
     let c = 0; // received
-    let d_amt = 0; // due  
+    let d_amt = 0; // due
     let w = 0; // withdraw
-    
-    transactionResults.forEach(r => {
-      w = w + parseFloat(r.withdraw || 0);
-      c = c + parseFloat(r.r_amount || 0);
-      d_amt = d_amt + parseFloat(r.d_amount || 0);
+
+    transactionResults.forEach((r) => {
+      w += parseFloat(r.withdraw || 0);
+      c += parseFloat(r.r_amount || 0);
+      d_amt += parseFloat(r.d_amount || 0);
     });
-    
+
     const h = c - d_amt - w;
-    
+
     res.json({
+      todayDate: d,
       todayScans: count,
       todayReceived: c,
       todayDue: d_amt,
       todayWithdraw: w,
       cashInHand: h <= 0 ? 0 : h,
-      totalAmount: totalAmount
+      totalAmount: totalAmount,
     });
-    
   } catch (error) {
-    console.error('Superadmin stats error:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch superadmin stats',
-      details: error.message
+    console.error("Superadmin stats error:", error);
+    res.status(500).json({
+      error: "Failed to fetch superadmin stats",
+      details: error.message,
     });
   } finally {
     if (connection) await connection.end();
