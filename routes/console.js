@@ -14,11 +14,14 @@ const dbConfig = {
 // Console queue - matches PHP query exactly
 router.get('/queue', async (req, res) => {
   let connection;
+  let dataQuery = '';
   try {
+    console.log('Console queue request received:', req.query);
     const { page = 1, limit = 10, search = '' } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
     connection = await mysql.createConnection(dbConfig);
+    console.log('Database connection established');
 
     // Build WHERE clause - Match PHP logic exactly
     let whereClause = `
@@ -44,20 +47,22 @@ router.get('/queue', async (req, res) => {
 
     const [countResult] = await connection.execute(countQuery, queryParams);
     const total = countResult[0].total;
+    console.log('Total records found:', total);
 
     // Get paginated data - Match PHP columns exactly
-    const dataQuery = `
+    dataQuery = `
       SELECT 
         lab_banch.*,
         patient_new.*
       FROM lab_banch 
       JOIN patient_new ON patient_new.cro = lab_banch.cro_number
       ${whereClause}
-      ORDER BY patient_new.p_id DESC
+      ORDER BY patient_new.patient_id DESC
       LIMIT ? OFFSET ?
     `;
 
     const [patients] = await connection.execute(dataQuery, [...queryParams, parseInt(limit), offset]);
+    console.log('Query executed successfully, found', patients.length, 'patients');
 
     res.json({
       success: true,
@@ -71,7 +76,7 @@ router.get('/queue', async (req, res) => {
   } catch (error) {
     console.error('Console queue error:', error);
     res.status(500).json({
-      error: dataQuery.toString(),
+      error: dataQuery || 'Query not initialized',
       details: error.message,
       stack: error.stack,
       query: req.query,
@@ -103,7 +108,7 @@ router.get('/patient/:cro', async (req, res) => {
     const [patients] = await connection.execute(`
       SELECT 
         patient_new.*,
-        time_slot2.time_name,
+        time_slot2.time_slot,
         doctor.dname as doctor_name
       FROM patient_new 
       JOIN time_slot2 ON time_slot2.time_id = patient_new.allot_time 
@@ -349,28 +354,52 @@ router.get('/stats', async (req, res) => {
 router.get('/daily-report', async (req, res) => {
   let connection;
   try {
-    const { date } = req.query;
+    const { date, page = 1, limit = 10, export: isExport } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    
     // Use Asia/Calcutta timezone like PHP
-    const reportDate = date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Calcutta' });
+    const reportDate = date || new Date().toLocaleDateString('en-CA', {
+      timeZone: 'Asia/Kolkata'  // Use 'Asia/Kolkata', not 'Asia/Calcutta'
+    });
 
     connection = await mysql.createConnection(dbConfig);
 
-    const [reports] = await connection.execute(`
+    // Get total count - Match PHP query exactly
+    const [countResult] = await connection.execute(`
+      SELECT COUNT(*) as total
+      FROM patient_new 
+      JOIN doctor ON doctor.d_id = patient_new.doctor_name  
+      JOIN console ON console.c_p_cro = patient_new.cro 
+      WHERE console.added_on = ? AND console.status = 'Complete'
+    `, [reportDate]);
+    
+    const total = countResult[0].total;
+
+    // Get data - all data for export, paginated for display
+    const query = `
       SELECT 
         console.*,
-        patient_new.patient_name,
-        patient_new.pre
-      FROM console
-      JOIN patient_new ON patient_new.cro = console.cro_number
-      WHERE console.added_on = ?
-      ORDER BY console.con_id DESC
-    `, [reportDate]);
+        patient_new.*,
+        doctor.dname as doctor_name
+      FROM patient_new 
+      JOIN doctor ON doctor.d_id = patient_new.doctor_name  
+      JOIN console ON console.c_p_cro = patient_new.cro 
+      WHERE console.added_on = ? AND console.status = 'Complete'
+      ORDER BY console.con_id ASC
+      ${isExport ? '' : 'LIMIT ? OFFSET ?'}
+    `;
+    
+    const params = isExport ? [reportDate] : [reportDate, parseInt(limit), offset];
+    const [reports] = await connection.execute(query, params);
 
     res.json({
       success: true,
       data: reports,
       date: reportDate,
-      total: reports.length
+      total: total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / parseInt(limit))
     });
 
   } catch (error) {
@@ -406,7 +435,7 @@ router.get('/queue-after', async (req, res) => {
     connection = await mysql.createConnection(dbConfig);
 
     // Build WHERE clause - Match PHP logic exactly
-    let whereClause = 'WHERE lab_banch.c_status=1 AND DATE(lab_banch.added_on) >= "2023-06-01"';
+    let whereClause = `WHERE lab_banch.c_status=1 AND lab_banch.added >= UNIX_TIMESTAMP('2023-06-01 00:00:00')`;
     const queryParams = [];
 
     if (search && search.trim()) {
