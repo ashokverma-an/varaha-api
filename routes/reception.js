@@ -492,6 +492,100 @@ router.get('/patients/:id', async (req, res) => {
   }
 });
 
+// Receipt data endpoint (matches PHP d_payment.php)
+router.get('/receipt/:cro', async (req, res) => {
+  let connection;
+  try {
+    connection = await mysql.createConnection(dbConfig);
+    const { cro } = req.params;
+    const decodedCro = decodeURIComponent(cro);
+    
+    // Get patient data with doctor and hospital info
+    const patientQuery = `
+      SELECT p.*, d.dname, h.h_short, h.h_name
+      FROM patient_new p
+      LEFT JOIN doctor d ON d.d_id = p.doctor_name
+      LEFT JOIN hospital h ON h.h_id = p.hospital_id
+      WHERE p.cro = ?
+    `;
+    
+    const [patients] = await connection.execute(patientQuery, [decodedCro]);
+    
+    if (patients.length === 0) {
+      return res.status(404).json({ error: 'Patient not found' });
+    }
+    
+    const patient = patients[0];
+    
+    // Get scan details
+    let scanNames = [];
+    let totalScanAmount = 0;
+    
+    if (patient.scan_type) {
+      const scanIds = patient.scan_type.split(',');
+      for (const scanId of scanIds) {
+        if (scanId.trim()) {
+          const [scanData] = await connection.execute(
+            'SELECT s_name, charges FROM scan WHERE s_id = ?', [scanId.trim()]
+          );
+          if (scanData.length > 0) {
+            scanNames.push(scanData[0].s_name);
+            totalScanAmount += parseFloat(scanData[0].charges) || 0;
+          }
+        }
+      }
+    }
+    
+    // Get time slot details
+    let timeSlot = '';
+    if (patient.allot_time) {
+      const [timeData] = await connection.execute(
+        'SELECT time_slot FROM time_slot2 WHERE time_id = ?', [patient.allot_time]
+      );
+      if (timeData.length > 0) {
+        timeSlot = timeData[0].time_slot;
+      }
+    }
+    
+    // Format receipt data
+    const receiptData = {
+      cro: patient.cro,
+      patient_id: patient.patient_id,
+      patient_name: patient.patient_name,
+      age: patient.age,
+      gender: patient.gender,
+      address: patient.address,
+      city: patient.city,
+      contact_number: patient.contact_number,
+      category: patient.category,
+      doctor_name: patient.dname || '',
+      hospital_short: patient.h_short || '',
+      hospital_name: patient.h_name || '',
+      appointment_date: patient.allot_date,
+      appointment_time: timeSlot,
+      investigations: scanNames.join(', '),
+      scan_amount: totalScanAmount,
+      received_amount: patient.amount_reci || 0,
+      total_amount: patient.amount || 0,
+      date: patient.date
+    };
+    
+    res.json({
+      success: true,
+      data: receiptData
+    });
+    
+  } catch (error) {
+    console.error('Receipt data error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch receipt data',
+      details: error.message
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
 // Patient update endpoint
 router.put('/patients/:id', async (req, res) => {
   let connection;
@@ -828,23 +922,31 @@ router.post('/patients/generate-cro', async (req, res) => {
   }
 });
 
-// Patient list for all patients (not just today)
-router.get('/patients/all', async (req, res) => {
+// Today's patient registrations
+router.get('/patients/today', async (req, res) => {
   let connection;
   try {
     connection = await mysql.createConnection(dbConfig);
     
-    // Same query as PHP: patients with scan_status = 0 and patient_id > 7253
+    // Get today's date in dd-mm-yyyy format
+    const now = new Date();
+    const calcuttaTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Calcutta" }));
+    const dd = String(calcuttaTime.getDate()).padStart(2, "0");
+    const mm = String(calcuttaTime.getMonth() + 1).padStart(2, "0");
+    const yyyy = calcuttaTime.getFullYear();
+    const date = `${dd}-${mm}-${yyyy}`;
+    
+    // Query for today's registrations
     const query = `
       SELECT p.*, h.h_name, d.dname 
       FROM patient_new p
       LEFT JOIN hospital h ON h.h_id = p.hospital_id
       LEFT JOIN doctor d ON d.d_id = p.doctor_name
-      WHERE p.patient_id > 7253 AND p.scan_status = 0
+      WHERE p.date = ?
       ORDER BY p.patient_id DESC
     `;
     
-    const [patients] = await connection.execute(query);
+    const [patients] = await connection.execute(query, [date]);
     
     // Format the response to match frontend expectations
     const formattedPatients = patients.map(patient => ({
@@ -852,6 +954,7 @@ router.get('/patients/all', async (req, res) => {
       cro: patient.cro,
       patient_name: `${patient.pre || ''}${patient.patient_name || ''}`,
       amount_due: patient.amount_due || 0,
+      amount_reci: patient.amount_reci || 0,
       doctor_name: patient.dname || '',
       hospital_name: patient.h_name || '',
       scan_status: patient.scan_status || 0,
@@ -876,9 +979,9 @@ router.get('/patients/all', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('All patients list error:', error);
+    console.error('Today patients list error:', error);
     res.status(500).json({
-      error: 'Failed to fetch all patients list',
+      error: 'Failed to fetch today patients list',
       details: error.message
     });
   } finally {
@@ -1250,6 +1353,153 @@ router.get('/reports/revenue', async (req, res) => {
     if (connection) await connection.end();
   }
 });
+
+// Appointment report endpoint (matches PHP appoexcel.php logic)
+router.get('/reports/appointment', async (req, res) => {
+  let connection;
+  try {
+    connection = await mysql.createConnection(dbConfig);
+    const { date } = req.query;
+    
+    if (!date) {
+      // Default to today's date in dd-mm-yyyy format
+      const now = new Date();
+      const calcuttaTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Calcutta" }));
+      const dd = String(calcuttaTime.getDate()).padStart(2, "0");
+      const mm = String(calcuttaTime.getMonth() + 1).padStart(2, "0");
+      const yyyy = calcuttaTime.getFullYear();
+      const todayDate = `${dd}-${mm}-${yyyy}`;
+      
+      const query = `SELECT * FROM patient_new WHERE allot_date = ?`;
+      const [patients] = await connection.execute(query, [todayDate]);
+      
+      const reportData = await processAppointmentData(connection, patients);
+      
+      return res.json({
+        success: true,
+        data: reportData,
+        date: todayDate,
+        total: reportData.length
+      });
+    }
+    
+    // Main query - same as PHP
+    const query = `SELECT * FROM patient_new WHERE allot_date = ?`;
+    const [patients] = await connection.execute(query, [date]);
+    
+    const reportData = await processAppointmentData(connection, patients);
+    
+    res.json({
+      success: true,
+      data: reportData,
+      date,
+      total: reportData.length
+    });
+    
+  } catch (error) {
+    console.error('Appointment report error:', error);
+    res.status(500).json({
+      error: 'Failed to generate appointment report',
+      details: error.message
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Helper function to process appointment data
+async function processAppointmentData(connection, patients) {
+  const reportData = [];
+  
+  for (let i = 0; i < patients.length; i++) {
+    const patient = patients[i];
+    
+    // Get scan details
+    let scanNames = '';
+    if (patient.scan_type) {
+      const scanIds = patient.scan_type.split(',');
+      for (const scanId of scanIds) {
+        if (scanId.trim()) {
+          const [scanData] = await connection.execute(
+            'SELECT s_name FROM scan WHERE s_id = ?', [scanId.trim()]
+          );
+          if (scanData.length > 0) {
+            scanNames += scanData[0].s_name + ', ';
+          }
+        }
+      }
+      scanNames = scanNames.replace(/, $/, '');
+    }
+    
+    // Get time in details
+    let timeIn = '';
+    if (patient.allot_time) {
+      const timeIds = patient.allot_time.split(',');
+      for (const timeId of timeIds) {
+        if (timeId.trim()) {
+          const [timeData] = await connection.execute(
+            'SELECT time_slot FROM time_slot2 WHERE time_id = ?', [timeId.trim()]
+          );
+          if (timeData.length > 0) {
+            timeIn += timeData[0].time_slot;
+          }
+        }
+      }
+    }
+    
+    // Get time out details
+    let timeOut = '';
+    if (patient.allot_time_out) {
+      const timeIds = patient.allot_time_out.split(',');
+      for (const timeId of timeIds) {
+        if (timeId.trim()) {
+          const [timeData] = await connection.execute(
+            'SELECT time_slot FROM time_slot2 WHERE time_id = ?', [timeId.trim()]
+          );
+          if (timeData.length > 0) {
+            timeOut += timeData[0].time_slot;
+          }
+        }
+      }
+    }
+    
+    // Determine status
+    let status = 'Pending';
+    let completedDate = '';
+    
+    if (patient.scan_status === 3) {
+      status = 'Shared to Console';
+    } else if (patient.scan_status === 1) {
+      status = 'Completed';
+      // Get completion date from console table
+      const [consoleData] = await connection.execute(
+        'SELECT added_on FROM console WHERE c_p_cro = ?', [patient.cro]
+      );
+      if (consoleData.length > 0) {
+        completedDate = consoleData[0].added_on;
+      }
+    }
+    
+    reportData.push({
+      sno: i + 1,
+      cro: patient.cro,
+      patient_name: patient.patient_name,
+      age: patient.age,
+      gender: patient.gender,
+      category: patient.category,
+      scan_type: scanNames,
+      total_scan: patient.total_scan,
+      time_in: timeIn,
+      time_out: timeOut,
+      status: status,
+      completed_date: completedDate,
+      appointment_date: patient.allot_date,
+      appointment_time: timeIn
+    });
+  }
+  
+  return reportData;
+}
 
 // Revenue report Excel export endpoint
 router.get('/reports/revenue/excel', async (req, res) => {
