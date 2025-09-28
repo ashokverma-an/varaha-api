@@ -979,6 +979,400 @@ router.get('/reports/doctor/excel', async (req, res) => {
   }
 });
 
+// Daily report endpoint (matches PHP execl.php logic)
+router.get('/reports/daily', async (req, res) => {
+  let connection;
+  try {
+    connection = await mysql.createConnection(dbConfig);
+    const { date } = req.query;
+    
+    if (!date) {
+      return res.status(400).json({ error: 'Date is required' });
+    }
+    
+    // Convert dd-mm-yyyy to yyyy-mm-dd format for SQL
+    const convertDate = (dateStr) => {
+      const parts = dateStr.split('-');
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    };
+    
+    const sqlDate = convertDate(date);
+    
+    // Main query - same as PHP
+    const query = `
+      SELECT p.*, d.dname, h.h_name, h.h_short, t.r_amount, t.d_amount 
+      FROM patient_new p
+      JOIN doctor d ON d.d_id = p.doctor_name 
+      JOIN hospital h ON h.h_id = p.hospital_id 
+      JOIN today_transeciton t ON t.cro = p.cro  
+      WHERE p.date = ? AND t.added_on = ? AND t.withdraw = 0 
+      ORDER BY p.patient_id
+    `;
+    
+    const [patients] = await connection.execute(query, [date, date]);
+    
+    // Calculate totals
+    let totalScans = 0;
+    let totalAmount = 0;
+    let totalReceived = 0;
+    let totalDue = 0;
+    
+    // Process each patient and get scan details
+    const reportData = [];
+    
+    for (let i = 0; i < patients.length; i++) {
+      const patient = patients[i];
+      
+      // Get scan details
+      let scanNames = '';
+      let scanCount = 0;
+      
+      if (patient.scan_type) {
+        const scanIds = patient.scan_type.split(',');
+        for (const scanId of scanIds) {
+          if (scanId.trim()) {
+            const [scanData] = await connection.execute(
+              'SELECT s_name, total_scan FROM scan WHERE s_id = ?', [scanId.trim()]
+            );
+            if (scanData.length > 0) {
+              scanNames += scanData[0].s_name + ', ';
+              scanCount += parseInt(scanData[0].total_scan || 0);
+            }
+          }
+        }
+        scanNames = scanNames.replace(/, $/, ''); // Remove trailing comma
+      }
+      
+      totalScans += scanCount;
+      totalAmount += parseFloat(patient.amount || 0);
+      totalReceived += parseFloat(patient.r_amount || 0);
+      totalDue += parseFloat(patient.d_amount || 0);
+      
+      reportData.push({
+        sno: i + 1,
+        cro: patient.cro,
+        patientName: patient.patient_name,
+        age: patient.age,
+        gender: patient.gender,
+        category: patient.category,
+        doctorName: patient.dname,
+        hospitalName: patient.h_short || patient.h_name,
+        scanType: scanNames,
+        totalScan: scanCount,
+        totalAmount: parseFloat(patient.amount || 0),
+        receivedAmount: parseFloat(patient.r_amount || 0),
+        dueAmount: parseFloat(patient.d_amount || 0),
+        contactNumber: patient.contact_number
+      });
+    }
+    
+    // Get additional financial data (credit, refund, etc.)
+    const [creditData] = await connection.execute(`
+      SELECT SUM(t.r_amount) as credit_amount, GROUP_CONCAT(CONCAT(t.cro, '(', t.r_amount, ')')) as credit_cros
+      FROM patient_new p 
+      JOIN today_transeciton t ON t.cro = p.cro 
+      WHERE t.added_on = ? AND p.date <> ?
+    `, [date, date]);
+    
+    const [expenseData] = await connection.execute(`
+      SELECT 
+        SUM(CASE WHEN trans_type = 'Refund' THEN withdraw ELSE 0 END) as refund,
+        SUM(CASE WHEN trans_type = 'discount' THEN withdraw ELSE 0 END) as discount,
+        SUM(CASE WHEN trans_type = 'complimentry' THEN withdraw ELSE 0 END) as complimentry,
+        SUM(CASE WHEN trans_type = 'Expanse' THEN withdraw ELSE 0 END) as expanse
+      FROM today_transeciton 
+      WHERE added_on = ?
+    `, [date]);
+    
+    const creditAmount = parseFloat(creditData[0]?.credit_amount || 0);
+    const refund = parseFloat(expenseData[0]?.refund || 0);
+    const discount = parseFloat(expenseData[0]?.discount || 0);
+    const complimentry = parseFloat(expenseData[0]?.complimentry || 0);
+    const expanse = parseFloat(expenseData[0]?.expanse || 0);
+    
+    const netAmount = totalReceived + creditAmount - complimentry - discount - refund - expanse;
+    
+    res.json({
+      success: true,
+      data: reportData,
+      summary: {
+        totalScans,
+        totalAmount,
+        totalReceived,
+        totalDue,
+        creditAmount,
+        refund,
+        discount,
+        complimentry,
+        expanse,
+        netAmount,
+        creditCros: creditData[0]?.credit_cros || ''
+      },
+      date,
+      total: reportData.length
+    });
+    
+  } catch (error) {
+    console.error('Daily report error:', error);
+    res.status(500).json({
+      error: 'Failed to generate daily report',
+      details: error.message
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Revenue report endpoint (matches PHP revenue_report.php logic)
+router.get('/reports/revenue', async (req, res) => {
+  let connection;
+  try {
+    connection = await mysql.createConnection(dbConfig);
+    const { date } = req.query;
+    
+    if (!date) {
+      return res.status(400).json({ error: 'Date is required' });
+    }
+    
+    // Convert dd-mm-yyyy to yyyy-mm-dd format for SQL
+    const convertDate = (dateStr) => {
+      const parts = dateStr.split('-');
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    };
+    
+    const sqlDate = convertDate(date);
+    
+    // Main query - same as PHP
+    const query = `
+      SELECT p.*, c.number_films, c.number_contrast, c.issue_cd, c.status
+      FROM patient_new p
+      JOIN console c ON c.c_p_cro = p.cro 
+      WHERE c.added_on = ? AND c.status = 'Complete'
+      ORDER BY c.con_id ASC
+    `;
+    
+    const [patients] = await connection.execute(query, [sqlDate]);
+    
+    // Calculate totals
+    let totalFilms = 0;
+    let totalContrast = 0;
+    let totalScans = 0;
+    let totalAmount = 0;
+    let totalCd = 0;
+    let totalPaid = 0;
+    let totalFree = 0;
+    
+    // Process each patient and get scan details
+    const reportData = [];
+    
+    for (let i = 0; i < patients.length; i++) {
+      const patient = patients[i];
+      
+      // Get scan details
+      let scanNames = '';
+      let scanCount = 0;
+      
+      if (patient.scan_type) {
+        const scanIds = patient.scan_type.split(',');
+        for (const scanId of scanIds) {
+          if (scanId.trim()) {
+            const [scanData] = await connection.execute(
+              'SELECT s_name, total_scan FROM scan WHERE s_id = ?', [scanId.trim()]
+            );
+            if (scanData.length > 0) {
+              scanNames += scanData[0].s_name + ', ';
+              scanCount += parseInt(scanData[0].total_scan || 0);
+            }
+          }
+        }
+        scanNames = scanNames.replace(/, $/, ''); // Remove trailing comma
+      }
+      
+      // Check if free categories (same as PHP logic)
+      const freeCategories = ['BPL/POOR', 'Sn. CITIZEN', 'BHAMASHAH', 'RTA', 'JSSY', 'PRISONER'];
+      const isFree = freeCategories.includes(patient.category);
+      
+      totalFilms += parseInt(patient.number_films || 0);
+      totalContrast += parseInt(patient.number_contrast || 0);
+      totalScans += scanCount;
+      totalAmount += parseFloat(patient.amount || 0);
+      
+      if (patient.issue_cd === 'Yes') {
+        totalCd++;
+      }
+      
+      if (isFree) {
+        totalFree += scanCount;
+      } else {
+        totalPaid += scanCount;
+      }
+      
+      reportData.push({
+        sno: i + 1,
+        cro: patient.cro,
+        patientName: patient.patient_name,
+        age: patient.age,
+        category: patient.category,
+        scanType: scanNames,
+        films: parseInt(patient.number_films || 0),
+        numberOfScan: scanCount,
+        issueCd: patient.issue_cd === 'Yes' ? 1 : 0,
+        contrast: parseInt(patient.number_contrast || 0),
+        paid: isFree ? 0 : scanCount,
+        free: isFree ? scanCount : 0,
+        amount: parseFloat(patient.amount || 0)
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: reportData,
+      summary: {
+        totalFilms,
+        totalContrast,
+        totalScans,
+        totalAmount,
+        totalCd,
+        totalPaid,
+        totalFree
+      },
+      date,
+      total: reportData.length
+    });
+    
+  } catch (error) {
+    console.error('Revenue report error:', error);
+    res.status(500).json({
+      error: 'Failed to generate revenue report',
+      details: error.message
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Revenue report Excel export endpoint
+router.get('/reports/revenue/excel', async (req, res) => {
+  let connection;
+  try {
+    connection = await mysql.createConnection(dbConfig);
+    const { date } = req.query;
+    
+    if (!date) {
+      return res.status(400).json({ error: 'Date is required' });
+    }
+    
+    const filename = `REVENUE-${date}.xls`;
+    
+    // Set Excel headers exactly like PHP
+    res.setHeader('Content-Type', 'application/vnd.ms-excel');
+    res.setHeader('Content-Disposition', `attachment;Filename='${filename}'`);
+    
+    // Get report data (reuse logic from above)
+    const response = await fetch(`${req.protocol}://${req.get('host')}/api/reception/reports/revenue?date=${date}`);
+    const reportResult = await response.json();
+    
+    if (!reportResult.success) {
+      return res.status(500).send('Error generating report');
+    }
+    
+    const { data: reportData, summary } = reportResult;
+    
+    // Start HTML output exactly like PHP
+    let htmlOutput = '<html>';
+    htmlOutput += '<meta http-equiv="Content-Type" content="text/html; charset=Windows-1252"><body>';
+    htmlOutput += '<table border="1"><tr><th colspan="13">VARAHA SDC</th></tr>';
+    htmlOutput += `<tr><th style="text-align:center;" colspan="13">CONSOLE REVENUE - ${date}</th></tr>`;
+    htmlOutput += '<tr><th>S.No</th><th>CRO</th><th>NAME</th><th>AGE</th><th>CATEGORY</th><th>SCAN TYPE</th><th>FILMS</th><th>NUMBER OF SCAN</th><th>ISSUE CD / DVD</th><th>CONTRAST</th><th>PAID</th><th>FREE</th><th>AMOUNT</th></tr>';
+    
+    // Add data rows
+    reportData.forEach(row => {
+      htmlOutput += `<tr><td>${row.sno}</td><td>${row.cro}</td><td>${row.patientName}</td><td>${row.age}</td><td>${row.category}</td><td>${row.scanType}</td><td>${row.films}</td><td>${row.numberOfScan}</td><td>${row.issueCd}</td><td>${row.contrast}</td><td>${row.paid || '&nbsp;'}</td><td>${row.free || '&nbsp;'}</td><td>${row.amount}</td></tr>`;
+    });
+    
+    // Add summary row exactly like PHP
+    htmlOutput += `<tr><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>TOTAL</th><th>${summary.totalFilms}</th><th>${summary.totalScans}</th><th>${summary.totalCd}</th><th>${summary.totalContrast}</th><th>${summary.totalPaid}</th><th>${summary.totalFree}</th><th>${summary.totalAmount}</th></tr>`;
+    
+    htmlOutput += '</table></body></html>';
+    
+    res.send(htmlOutput);
+    
+  } catch (error) {
+    console.error('Revenue report Excel error:', error);
+    res.status(500).json({
+      error: 'Failed to generate Excel report',
+      details: error.message
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Daily report Excel export endpoint
+router.get('/reports/daily/excel', async (req, res) => {
+  let connection;
+  try {
+    connection = await mysql.createConnection(dbConfig);
+    const { date } = req.query;
+    
+    if (!date) {
+      return res.status(400).json({ error: 'Date is required' });
+    }
+    
+    const filename = `DAILY REPORT-${date}.xls`;
+    
+    // Set Excel headers exactly like PHP
+    res.setHeader('Content-Type', 'application/vnd.ms-excel');
+    res.setHeader('Content-Disposition', `attachment;Filename='${filename}'`);
+    
+    // Get report data (reuse logic from above)
+    const response = await fetch(`${req.protocol}://${req.get('host')}/api/reception/reports/daily?date=${date}`);
+    const reportResult = await response.json();
+    
+    if (!reportResult.success) {
+      return res.status(500).send('Error generating report');
+    }
+    
+    const { data: reportData, summary } = reportResult;
+    
+    // Start HTML output exactly like PHP
+    let htmlOutput = '<html>';
+    htmlOutput += '<meta http-equiv="Content-Type" content="text/html; charset=Windows-1252"><body>';
+    htmlOutput += '<table border="1"><tr><th colspan="14">VARAHA SDC</th></tr>';
+    htmlOutput += `<tr><th style="text-align:center;" colspan="14">DAILY REPORT-${date}</th></tr>`;
+    htmlOutput += '<tr><th>S.No</th><th>CRO</th><th>NAME</th><th>AGE</th><th>GENDER</th><th>CATEGORY</th><th>DOCTOR</th><th>HOSPITAL</th><th>SCAN TYPE</th><th>TOTAL SCAN</th><th>TOTAL AMOUNT</th><th>RECIVE AMOUNT</th><th>DUE AMOUNT</th><th>CONTACT NUMBER</th></tr>';
+    
+    // Add data rows
+    reportData.forEach(row => {
+      htmlOutput += `<tr><td>${row.sno}</td><td>${row.cro}</td><td>${row.patientName}</td><td>${row.age}</td><td>${row.gender}</td><td>${row.category}</td><td>${row.doctorName}</td><td>${row.hospitalName}</td><td>${row.scanType}</td><td>${row.totalScan}</td><td>${row.totalAmount}</td><td>${row.receivedAmount}</td><td>${row.dueAmount}</td><td>${row.contactNumber}</td></tr>`;
+    });
+    
+    // Add summary rows exactly like PHP
+    htmlOutput += `<tr><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>TOTAL</th><th>${summary.totalScans}</th><th>${summary.totalAmount}</th><th>${summary.totalReceived}</th><th>${summary.totalDue}</th><th>&nbsp;</th></tr>`;
+    htmlOutput += `<tr><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>TOTAL RECIVE AMOUNT</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>${summary.totalReceived}</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th></tr>`;
+    htmlOutput += `<tr><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>TOTAL DUE AMOUNT</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>${summary.totalDue}</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th></tr>`;
+    htmlOutput += `<tr><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>TOTAL CREDIT RECIVE</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>${summary.creditAmount}</th><th>${summary.creditCros}</th><th>&nbsp;</th><th>&nbsp;</th></tr>`;
+    htmlOutput += `<tr><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>TOTAL DISCOUNT</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>${summary.discount}</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th></tr>`;
+    htmlOutput += `<tr><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>TOTAL COMPLIMENTRY</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>${summary.complimentry}</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th></tr>`;
+    htmlOutput += `<tr><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>TOTAL REFUND</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>${summary.refund}</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th></tr>`;
+    htmlOutput += `<tr><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>TOTAL EXPANSE</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>${summary.expanse}</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th></tr>`;
+    htmlOutput += `<tr><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>NET AMOUNT</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>${summary.netAmount}</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th></tr>`;
+    
+    htmlOutput += '</table></body></html>';
+    
+    res.send(htmlOutput);
+    
+  } catch (error) {
+    console.error('Daily report Excel error:', error);
+    res.status(500).json({
+      error: 'Failed to generate Excel report',
+      details: error.message
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
 // Doctor report endpoint
 router.get('/reports/doctor', async (req, res) => {
   let connection;
