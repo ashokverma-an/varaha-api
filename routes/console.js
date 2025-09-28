@@ -501,4 +501,81 @@ router.get('/queue-after', async (req, res) => {
   }
 });
 
+// Detail report - date range filtering
+router.get('/detail-report', async (req, res) => {
+  let connection;
+  try {
+    const { fromDate, toDate, page = 1, limit = 10, export: isExport } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    
+    if (!fromDate || !toDate) {
+      return res.status(400).json({
+        error: 'Both fromDate and toDate are required'
+      });
+    }
+
+    connection = await mysql.createConnection(dbConfig);
+
+    // Get total count
+    const [countResult] = await connection.execute(`
+      SELECT COUNT(*) as total
+      FROM patient_new 
+      JOIN console ON console.c_p_cro = patient_new.cro 
+      JOIN doctor ON doctor.d_id = patient_new.doctor_name
+      WHERE console.added_on BETWEEN ? AND ?
+    `, [fromDate, toDate]);
+    
+    const total = countResult[0].total;
+
+    // Get data with doctor name
+    const query = `
+      SELECT 
+        console.*,
+        patient_new.*,
+        doctor.dname as doctor_name
+      FROM patient_new 
+      JOIN console ON console.c_p_cro = patient_new.cro 
+      JOIN doctor ON doctor.d_id = patient_new.doctor_name
+      WHERE console.added_on BETWEEN ? AND ?
+      ORDER BY console.con_id ASC
+      ${isExport ? '' : 'LIMIT ? OFFSET ?'}
+    `;
+    
+    const params = isExport ? [fromDate, toDate] : [fromDate, toDate, parseInt(limit), offset];
+    const [reports] = await connection.execute(query, params);
+
+    res.json({
+      success: true,
+      data: reports,
+      fromDate: fromDate,
+      toDate: toDate,
+      total: total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / parseInt(limit))
+    });
+
+  } catch (error) {
+    console.error('Console detail report error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch detail report',
+      details: error.message,
+      stack: error.stack,
+      query: req.query,
+      dbConfig: {
+        host: dbConfig.host,
+        user: dbConfig.user,
+        database: dbConfig.database,
+        port: dbConfig.port
+      },
+      sqlError: error.code,
+      errno: error.errno,
+      sqlState: error.sqlState,
+      sqlMessage: error.sqlMessage
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
 module.exports = router;
