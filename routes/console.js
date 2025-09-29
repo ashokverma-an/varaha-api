@@ -246,7 +246,7 @@ router.post('/save-console', async (req, res) => {
     const currentDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Calcutta' });
     await connection.execute(`
       INSERT INTO console (
-        cro_number, start_time, stop_time, status, examination_id,
+        c_p_cro, start_time, stop_time, status, examination_id,
         number_scan, number_film, number_contrast, technician_name,
         nursing_name, issue_cd, remark, added_on
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -354,28 +354,25 @@ router.get('/stats', async (req, res) => {
 router.get('/daily-report', async (req, res) => {
   let connection;
   try {
-    const { date, page = 1, limit = 10, export: isExport } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    console.log('Daily report request received:', req.query);
+    const { fromDate, toDate } = req.query;
+    console.log('Extracted dates - fromDate:', fromDate, 'toDate:', toDate);
     
-    // Use Asia/Calcutta timezone like PHP
-    const reportDate = date || new Date().toLocaleDateString('en-CA', {
-      timeZone: 'Asia/Kolkata'  // Use 'Asia/Kolkata', not 'Asia/Calcutta'
-    });
+    // Convert DD-MM-YYYY to YYYY-MM-DD for SQL queries
+    const convertToSqlDate = (ddmmyyyy) => {
+      if (!ddmmyyyy) return null;
+      const parts = ddmmyyyy.split('-');
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    };
+    
+    const today = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }).replace(/\//g, '-');
+    const sqlStartDate = convertToSqlDate(fromDate || today);
+    const sqlEndDate = convertToSqlDate(toDate || today);
+    console.log('SQL dates - sqlStartDate:', sqlStartDate, 'sqlEndDate:', sqlEndDate);
 
     connection = await mysql.createConnection(dbConfig);
 
-    // Get total count - Match PHP query exactly
-    const [countResult] = await connection.execute(`
-      SELECT COUNT(*) as total
-      FROM patient_new 
-      JOIN doctor ON doctor.d_id = patient_new.doctor_name  
-      JOIN console ON console.c_p_cro = patient_new.cro 
-      WHERE console.added_on = ? AND console.status = 'Complete'
-    `, [reportDate]);
-    
-    const total = countResult[0].total;
-
-    // Get data - all data for export, paginated for display
+    // Get all data without pagination
     const query = `
       SELECT 
         console.*,
@@ -384,22 +381,18 @@ router.get('/daily-report', async (req, res) => {
       FROM patient_new 
       JOIN doctor ON doctor.d_id = patient_new.doctor_name  
       JOIN console ON console.c_p_cro = patient_new.cro 
-      WHERE console.added_on = ? AND console.status = 'Complete'
+      WHERE console.added_on BETWEEN ? AND ?
       ORDER BY console.con_id ASC
-      ${isExport ? '' : 'LIMIT ? OFFSET ?'}
     `;
     
-    const params = isExport ? [reportDate] : [reportDate, parseInt(limit), offset];
-    const [reports] = await connection.execute(query, params);
+    const [reports] = await connection.execute(query, [sqlStartDate, sqlEndDate]);
 
     res.json({
       success: true,
       data: reports,
-      date: reportDate,
-      total: total,
-      page: parseInt(page),
-      limit: parseInt(limit),
-      totalPages: Math.ceil(total / parseInt(limit))
+      fromDate: fromDate || today,
+      toDate: toDate || today,
+      total: reports.length
     });
 
   } catch (error) {
@@ -505,29 +498,22 @@ router.get('/queue-after', async (req, res) => {
 router.get('/detail-report', async (req, res) => {
   let connection;
   try {
-    const { fromDate, toDate, page = 1, limit = 10, export: isExport } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { fromDate, toDate } = req.query;
     
-    if (!fromDate || !toDate) {
-      return res.status(400).json({
-        error: 'Both fromDate and toDate are required'
-      });
-    }
+    // Convert DD-MM-YYYY to YYYY-MM-DD for SQL queries
+    const convertToSqlDate = (ddmmyyyy) => {
+      if (!ddmmyyyy) return null;
+      const parts = ddmmyyyy.split('-');
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    };
+    
+    const today = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }).replace(/\//g, '-');
+    const sqlStartDate = convertToSqlDate(fromDate || today);
+    const sqlEndDate = convertToSqlDate(toDate || today);
 
     connection = await mysql.createConnection(dbConfig);
 
-    // Get total count
-    const [countResult] = await connection.execute(`
-      SELECT COUNT(*) as total
-      FROM patient_new 
-      JOIN console ON console.c_p_cro = patient_new.cro 
-      JOIN doctor ON doctor.d_id = patient_new.doctor_name
-      WHERE console.added_on BETWEEN ? AND ?
-    `, [fromDate, toDate]);
-    
-    const total = countResult[0].total;
-
-    // Get data with doctor name
+    // Get all data without pagination
     const query = `
       SELECT 
         console.*,
@@ -538,21 +524,16 @@ router.get('/detail-report', async (req, res) => {
       JOIN doctor ON doctor.d_id = patient_new.doctor_name
       WHERE console.added_on BETWEEN ? AND ?
       ORDER BY console.con_id ASC
-      ${isExport ? '' : 'LIMIT ? OFFSET ?'}
     `;
     
-    const params = isExport ? [fromDate, toDate] : [fromDate, toDate, parseInt(limit), offset];
-    const [reports] = await connection.execute(query, params);
+    const [reports] = await connection.execute(query, [sqlStartDate, sqlEndDate]);
 
     res.json({
       success: true,
       data: reports,
-      fromDate: fromDate,
-      toDate: toDate,
-      total: total,
-      page: parseInt(page),
-      limit: parseInt(limit),
-      totalPages: Math.ceil(total / parseInt(limit))
+      fromDate: fromDate || today,
+      toDate: toDate || today,
+      total: reports.length
     });
 
   } catch (error) {
@@ -562,6 +543,56 @@ router.get('/detail-report', async (req, res) => {
       details: error.message,
       stack: error.stack,
       query: req.query,
+      dbConfig: {
+        host: dbConfig.host,
+        user: dbConfig.user,
+        database: dbConfig.database,
+        port: dbConfig.port
+      },
+      sqlError: error.code,
+      errno: error.errno,
+      sqlState: error.sqlState,
+      sqlMessage: error.sqlMessage
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Update console data - date and time fields
+router.post('/update-console', async (req, res) => {
+  let connection;
+  try {
+    const {
+      con_id,
+      added_on,
+      start_time,
+      stop_time
+    } = req.body;
+
+    connection = await mysql.createConnection(dbConfig);
+
+    // Update date and time fields
+    await connection.execute(`
+      UPDATE console SET 
+        added_on = ?,
+        start_time = ?,
+        stop_time = ?
+      WHERE con_id = ?
+    `, [added_on, start_time, stop_time, con_id]);
+
+    res.json({
+      success: true,
+      message: 'Console record updated successfully'
+    });
+
+  } catch (error) {
+    console.error('Update console data error:', error);
+    res.status(500).json({
+      error: 'Failed to update console data',
+      details: error.message,
+      stack: error.stack,
+      body: req.body,
       dbConfig: {
         host: dbConfig.host,
         user: dbConfig.user,
