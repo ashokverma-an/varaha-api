@@ -997,26 +997,24 @@ router.get('/ct-scan-doctor-list', async (req, res) => {
     }
     // Remove default date filter to show all data when no dates are specified
     
-    // Get total count with filters applied
+    // Get total count with filters applied - matching original PHP query structure
     const countQuery = `
       SELECT COUNT(*) as total
       FROM patient_new p
-      LEFT JOIN nursing_patient np ON p.cro = np.n_patient_cro
-      LEFT JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
       ${whereClause}
     `;
     
     const [countResult] = await connection.execute(countQuery, queryParams);
     const total = countResult[0].total;
     
-    // Get all data for client-side pagination
+    // Get all data for client-side pagination - matching original PHP query structure
     const dataQuery = `
       SELECT 
         p.*,
-        np.n_patient_ct,
+        COALESCE(np.n_patient_ct, 'no') as n_patient_ct,
         np.n_patient_ct_report_date,
         np.n_patient_ct_remark,
-        np.n_patient_x_ray,
+        COALESCE(np.n_patient_x_ray, 'no') as n_patient_x_ray,
         np.n_patient_x_ray_report_date,
         np.n_patient_x_ray_remark,
         np.ct_scan_doctor_id,
