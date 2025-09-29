@@ -1009,7 +1009,7 @@ router.get('/ct-scan-doctor-list', async (req, res) => {
     const [countResult] = await connection.execute(countQuery, queryParams);
     const total = countResult[0].total;
     
-    // Get paginated data
+    // Get all data for client-side pagination
     const dataQuery = `
       SELECT 
         p.*,
@@ -1026,18 +1026,14 @@ router.get('/ct-scan-doctor-list', async (req, res) => {
       LEFT JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
       ${whereClause}
       ORDER BY p.patient_id DESC
-      LIMIT ? OFFSET ?
     `;
     
-    const [patients] = await connection.execute(dataQuery, [...queryParams, parseInt(limit), offset]);
+    const [patients] = await connection.execute(dataQuery, queryParams);
     
     res.json({
       success: true,
       data: patients,
       total: total,
-      page: parseInt(page),
-      limit: parseInt(limit),
-      totalPages: Math.ceil(total / parseInt(limit)),
       defaultDate: today
     });
     
