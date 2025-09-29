@@ -984,21 +984,18 @@ router.get('/ct-scan-doctor-list', async (req, res) => {
       queryParams.push(`%${searchTerm}%`, `%${searchTerm}%`);
     }
     
-    // Date filtering logic - default to today if no dates provided
+    // Date filtering logic - show all data if no dates provided
     if (from_date && from_date.trim() && to_date && to_date.trim()) {
-      whereClause += ` AND p.date BETWEEN ? AND ?`;
+      whereClause += ` AND STR_TO_DATE(p.date, '%d-%m-%Y') BETWEEN STR_TO_DATE(?, '%d-%m-%Y') AND STR_TO_DATE(?, '%d-%m-%Y')`;
       queryParams.push(from_date.trim(), to_date.trim());
     } else if (from_date && from_date.trim()) {
-      whereClause += ` AND p.date >= ?`;
+      whereClause += ` AND STR_TO_DATE(p.date, '%d-%m-%Y') >= STR_TO_DATE(?, '%d-%m-%Y')`;
       queryParams.push(from_date.trim());
     } else if (to_date && to_date.trim()) {
-      whereClause += ` AND p.date <= ?`;
+      whereClause += ` AND STR_TO_DATE(p.date, '%d-%m-%Y') <= STR_TO_DATE(?, '%d-%m-%Y')`;
       queryParams.push(to_date.trim());
-    } else {
-      // Default to today's date
-      whereClause += ` AND p.date = ?`;
-      queryParams.push(today);
     }
+    // Remove default date filter to show all data when no dates are specified
     
     // Get total count with filters applied
     const countQuery = `
