@@ -925,6 +925,139 @@ router.get('/patient-in-queue', async (req, res) => {
 
 /**
  * @swagger
+ * /doctor/ct-scan-doctor-list:
+ *   get:
+ *     tags: [Doctor]
+ *     summary: Get CT scan doctor list with date filtering
+ *     description: Get list of patients with CT scan doctor assignments with date filtering
+ *     parameters:
+ *       - in: query
+ *         name: from_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - in: query
+ *         name: to_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of CT scan doctor assignments
+ */
+router.get('/ct-scan-doctor-list', async (req, res) => {
+  let connection;
+  try {
+    const { from_date, to_date, page = 1, limit = 10, search = '' } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    // Get today's date in DD-MM-YYYY format if no dates provided
+    const today = new Date().toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: '2-digit', 
+      year: 'numeric'
+    });
+    
+    // Build WHERE clause with date filtering
+    let whereClause = 'WHERE 1=1';
+    const queryParams = [];
+    
+    if (search && search.trim()) {
+      const searchTerm = decodeURIComponent(search.trim());
+      whereClause += ' AND (p.cro LIKE ? OR p.patient_name LIKE ?)';
+      queryParams.push(`%${searchTerm}%`, `%${searchTerm}%`);
+    }
+    
+    // Date filtering logic - default to today if no dates provided
+    if (from_date && from_date.trim() && to_date && to_date.trim()) {
+      whereClause += ` AND p.date BETWEEN ? AND ?`;
+      queryParams.push(from_date.trim(), to_date.trim());
+    } else if (from_date && from_date.trim()) {
+      whereClause += ` AND p.date >= ?`;
+      queryParams.push(from_date.trim());
+    } else if (to_date && to_date.trim()) {
+      whereClause += ` AND p.date <= ?`;
+      queryParams.push(to_date.trim());
+    } else {
+      // Default to today's date
+      whereClause += ` AND p.date = ?`;
+      queryParams.push(today);
+    }
+    
+    // Get total count with filters applied
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM patient_new p
+      LEFT JOIN nursing_patient np ON p.cro = np.n_patient_cro
+      LEFT JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
+      ${whereClause}
+    `;
+    
+    const [countResult] = await connection.execute(countQuery, queryParams);
+    const total = countResult[0].total;
+    
+    // Get paginated data
+    const dataQuery = `
+      SELECT 
+        p.*,
+        np.n_patient_ct,
+        np.n_patient_ct_report_date,
+        np.n_patient_ct_remark,
+        np.n_patient_x_ray,
+        np.n_patient_x_ray_report_date,
+        np.n_patient_x_ray_remark,
+        np.ct_scan_doctor_id,
+        csd.doctor_name as ct_doctor_name
+      FROM patient_new p
+      LEFT JOIN nursing_patient np ON p.cro = np.n_patient_cro
+      LEFT JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
+      ${whereClause}
+      ORDER BY p.patient_id DESC
+      LIMIT ? OFFSET ?
+    `;
+    
+    const [patients] = await connection.execute(dataQuery, [...queryParams, parseInt(limit), offset]);
+    
+    res.json({
+      success: true,
+      data: patients,
+      total: total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / parseInt(limit)),
+      defaultDate: today
+    });
+    
+  } catch (error) {
+    console.error('CT scan doctor list error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch CT scan doctor list',
+      details: error.message,
+      stack: error.stack
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+/**
+ * @swagger
  * /doctor/completed-reports:
  *   get:
  *     tags: [Doctor]
