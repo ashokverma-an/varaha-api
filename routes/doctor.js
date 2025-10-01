@@ -119,8 +119,7 @@ router.get('/stats', async (req, res) => {
 router.get('/pending-patients', async (req, res) => {
   let connection;
   try {
-    const { page = 1, limit = 10, search = '', date = '' } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { search = '', date = '' } = req.query;
     
     connection = await mysql.createConnection(dbConfig);
     
@@ -139,19 +138,7 @@ router.get('/pending-patients', async (req, res) => {
       queryParams.push(date.trim());
     }
     
-    // Get total count with filters applied
-    const countQuery = `
-      SELECT COUNT(*) as total
-      FROM nursing_patient np
-      JOIN patient_new p ON p.cro = np.n_patient_cro
-      LEFT JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
-      ${whereClause}
-    `;
-    
-    const [countResult] = await connection.execute(countQuery, queryParams);
-    const total = countResult[0].total;
-    
-    // Get paginated data - Match PHP columns exactly
+    // Get all data without pagination - Match PHP columns exactly
     const dataQuery = `
       SELECT 
         p.*,
@@ -167,18 +154,14 @@ router.get('/pending-patients', async (req, res) => {
       LEFT JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
       ${whereClause}
       ORDER BY p.patient_id DESC
-      LIMIT ? OFFSET ?
     `;
     
-    const [patients] = await connection.execute(dataQuery, [...queryParams, parseInt(limit), offset]);
+    const [patients] = await connection.execute(dataQuery, queryParams);
     
     res.json({
       success: true,
       data: patients,
-      total: total,
-      page: parseInt(page),
-      limit: parseInt(limit),
-      totalPages: Math.ceil(total / parseInt(limit))
+      total: patients.length
     });
     
   } catch (error) {
