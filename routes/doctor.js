@@ -123,7 +123,7 @@ router.get('/pending-patients', async (req, res) => {
     
     connection = await mysql.createConnection(dbConfig);
     
-    // Build WHERE clause - Match PHP logic exactly
+    // Match PHP query exactly
     let whereClause = 'WHERE (np.n_patient_x_ray = "no" OR np.n_patient_ct = "no")';
     const queryParams = [];
     
@@ -138,16 +138,11 @@ router.get('/pending-patients', async (req, res) => {
       queryParams.push(date.trim());
     }
     
-    // Get all data without pagination - Match PHP columns exactly
+    // Exact PHP query structure
     const dataQuery = `
       SELECT 
+        np.*,
         p.*,
-        np.n_patient_ct,
-        np.n_patient_ct_report_date,
-        np.n_patient_ct_remark,
-        np.n_patient_x_ray,
-        np.n_patient_x_ray_report_date,
-        np.n_patient_x_ray_remark,
         csd.doctor_name
       FROM nursing_patient np
       JOIN patient_new p ON p.cro = np.n_patient_cro
