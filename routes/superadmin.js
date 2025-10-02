@@ -323,136 +323,223 @@ router.get('/debug', async (req, res) => {
   }
 });
 
-// Revenue report endpoint
+// Revenue report endpoint - uses same logic as admin daily-revenue-report
 router.get('/revenue-report', async (req, res) => {
   let connection;
   try {
-    const { from_date, to_date } = req.query;
-    const fromDate = from_date || '2024-01-01';
-    const toDate = to_date || '2024-12-31';
+    const { date, type = 'D' } = req.query; // D = Detail, S = Summary
     
+    // Default to today's date in DD-MM-YYYY format
+    const today = new Date();
+    const dd = String(today.getDate()).padStart(2, '0');
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const yyyy = today.getFullYear();
+    const todayFormatted = `${dd}-${mm}-${yyyy}`;
+    
+    const selectedDate = date || todayFormatted;
+    
+    // Convert DD-MM-YYYY to YYYY-MM-DD for scan_date queries
+    const parts = selectedDate.split('-');
+    const scanDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+
     connection = await mysql.createConnection(dbConfig);
-    
-    // Dynamic query using column mappings
-    const query = `
-      SELECT 
-        patient_new.${DB_COLUMNS.patient_new.cro} as cro,
-        patient_new.${DB_COLUMNS.patient_new.name} as patient_name,
-        patient_new.${DB_COLUMNS.patient_new.age} as age,
-        patient_new.${DB_COLUMNS.patient_new.category} as category,
-        patient_new.${DB_COLUMNS.patient_new.scan_type} as scan_type,
-        patient_new.${DB_COLUMNS.patient_new.amount} as amount,
-        patient_new.${DB_COLUMNS.patient_new.date} as date,
-        console.${DB_COLUMNS.console.number_films} as number_films,
-        console.${DB_COLUMNS.console.number_contrast} as number_contrast,
-        console.${DB_COLUMNS.console.number_scan} as number_scan,
-        console.${DB_COLUMNS.console.issue_cd} as issue_cd,
-        console.${DB_COLUMNS.console.added_on} as added_on
-      FROM patient_new 
-      JOIN console ON console.${DB_COLUMNS.console.cro} = patient_new.${DB_COLUMNS.patient_new.cro}
-      WHERE STR_TO_DATE(console.${DB_COLUMNS.console.added_on}, '%Y-%m-%d') BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')
-        AND console.${DB_COLUMNS.console.status} = 'Complete'
-      ORDER BY console.${DB_COLUMNS.console.id} ASC
-      LIMIT 1000
-    `;
-    
-    const [revenue] = await connection.execute(query, [fromDate, toDate]);
-    
-    res.json({
-      success: true,
-      data: revenue,
-      total: Array.isArray(revenue) ? revenue.length : 0
-    });
-    
+
+    // Use same logic as admin daily-revenue-report
+    const adminModule = require('./admin');
+
+    if (type === 'S') {
+      // Summary Report - matches dail_revenue_summary_xls.php
+      const summaryData = await adminModule.generateSummaryReport(connection, scanDate, selectedDate);
+      res.json({
+        success: true,
+        type: 'summary',
+        data: summaryData,
+        date: selectedDate
+      });
+    } else {
+      // Detail Report - matches dail_revenue_xls.php  
+      const detailData = await adminModule.generateDetailReport(connection, scanDate, selectedDate);
+      res.json({
+        success: true,
+        type: 'detail', 
+        data: detailData,
+        date: selectedDate
+      });
+    }
+
   } catch (error) {
-    console.error('Revenue report error:', error);
-    res.status(500).json({ error: 'Failed to fetch revenue report', details: error.message });
+    console.error('Superadmin revenue report error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch revenue report',
+      details: error.message
+    });
   } finally {
     if (connection) await connection.end();
   }
 });
 
-// Console report endpoint
+// Console report endpoint - uses same logic as admin console-report
 router.get('/console-report', async (req, res) => {
   let connection;
   try {
-    const { from_date, to_date } = req.query;
-    const fromDate = from_date || '2024-01-01';
-    const toDate = to_date || '2024-12-31';
+    const { s_date } = req.query;
     
+    if (!s_date) {
+      return res.status(400).json({
+        error: 'Date parameter (s_date) is required'
+      });
+    }
+
+    // Convert DD-MM-YYYY to YYYY-MM-DD for database query
+    const parts = s_date.split('-');
+    const dbDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+
     connection = await mysql.createConnection(dbConfig);
-    
-    // Same query as con_revenue_report.php
+
+    // Main query - matches PHP exactly
     const query = `
-      SELECT 
-        patient_new.${DB_COLUMNS.patient_new.cro} as cro,
-        patient_new.${DB_COLUMNS.patient_new.name} as patient_name,
-        patient_new.${DB_COLUMNS.patient_new.age} as age,
-        patient_new.${DB_COLUMNS.patient_new.category} as category,
-        patient_new.${DB_COLUMNS.patient_new.scan_type} as scan_type,
-        patient_new.${DB_COLUMNS.patient_new.amount} as amount,
-        patient_new.${DB_COLUMNS.patient_new.date} as date,
-        doctor.${DB_COLUMNS.doctor.name} as doctor_name,
-        console.${DB_COLUMNS.console.number_films} as number_films,
-        console.${DB_COLUMNS.console.number_contrast} as number_contrast,
-        console.${DB_COLUMNS.console.number_scan} as number_scan,
-        console.${DB_COLUMNS.console.issue_cd} as issue_cd,
-        console.${DB_COLUMNS.console.start_time} as start_time,
-        console.${DB_COLUMNS.console.stop_time} as stop_time,
-        console.${DB_COLUMNS.console.status} as status,
-        console.${DB_COLUMNS.console.added_on} as added_on
+      SELECT patient_new.*, doctor.dname, console.* 
       FROM patient_new 
-      JOIN doctor ON doctor.${DB_COLUMNS.doctor.id} = patient_new.${DB_COLUMNS.patient_new.doctor_name}
-      JOIN console ON console.${DB_COLUMNS.console.cro} = patient_new.${DB_COLUMNS.patient_new.cro}
-      WHERE STR_TO_DATE(console.${DB_COLUMNS.console.added_on}, '%Y-%m-%d') BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')
-        AND console.${DB_COLUMNS.console.status} = 'Complete'
-      ORDER BY console.${DB_COLUMNS.console.id} ASC
-      LIMIT 1000
+      JOIN doctor ON doctor.d_id = patient_new.doctor_name  
+      JOIN console ON console.c_p_cro = patient_new.cro 
+      WHERE console.added_on = ? AND console.status = 'Complete' 
+      ORDER BY console.con_id ASC
     `;
     
-    const [consoleData] = await connection.execute(query, [fromDate, toDate]);
+    const [consoleData] = await connection.execute(query, [dbDate]);
+
+    const processedData = [];
+    let totals = {
+      films: 0,
+      contrast: 0,
+      scans: 0,
+      amount: 0,
+      cd: 0,
+      paid: 0,
+      free: 0
+    };
     
+    for (let i = 0; i < consoleData.length; i++) {
+      const row = consoleData[i];
+      
+      // Get scan names and total scans - matches PHP scan_type processing
+      let scanNames = '';
+      let scanTotal = 0;
+      
+      if (row.scan_type) {
+        const scanIds = row.scan_type.split(',').filter(id => id.trim());
+        for (const scanId of scanIds) {
+          const [scanResult] = await connection.execute(
+            'SELECT s_name, total_scan FROM scan WHERE s_id = ?',
+            [scanId.trim()]
+          );
+          if (scanResult.length > 0) {
+            scanNames += scanResult[0].s_name + ',';
+            scanTotal += scanResult[0].total_scan || 0;
+          }
+        }
+      }
+      
+      // CD/DVD issue status
+      const cdStatus = row.issue_cd === 'Yes' ? '1' : '0';
+      if (row.issue_cd === 'Yes') {
+        totals.cd++;
+      }
+      
+      // Free/Paid logic - matches PHP category conditions
+      const freeCategories = ['BPL/POOR', 'Sn. CITIZEN', 'BHAMASHAH', 'RTA', 'JSSY', 'PRISONER'];
+      const isFree = freeCategories.includes(row.category);
+      
+      let paidScans = 0;
+      let freeScans = 0;
+      
+      if (isFree) {
+        freeScans = scanTotal;
+        totals.free += scanTotal;
+      } else {
+        paidScans = scanTotal;
+        totals.paid += scanTotal;
+      }
+      
+      processedData.push({
+        sno: i + 1,
+        cro: row.cro || '',
+        patient_name: row.patient_name || '',
+        doctor_name: row.dname || '',
+        age: row.age || '',
+        category: row.category || '',
+        scan_type: scanNames.replace(/,$/, ''), // Remove trailing comma
+        number_films: row.number_films || 0,
+        number_of_scan: scanTotal,
+        issue_cd: cdStatus,
+        number_contrast: row.number_contrast || 0,
+        paid: isFree ? '' : paidScans,
+        free: isFree ? freeScans : '',
+        amount: row.amount || 0,
+        start_time: row.start_time || '',
+        stop_time: row.stop_time || '',
+        remark: row.remark || '',
+        status: row.status || ''
+      });
+      
+      // Update totals
+      totals.films += parseInt(row.number_films || 0);
+      totals.contrast += parseInt(row.number_contrast || 0);
+      totals.scans += scanTotal;
+      totals.amount += parseInt(row.amount || 0);
+    }
+
     res.json({
       success: true,
-      data: consoleData,
-      total: Array.isArray(consoleData) ? consoleData.length : 0
+      data: processedData,
+      totals: totals,
+      date: s_date,
+      total: processedData.length
     });
-    
+
   } catch (error) {
-    console.error('Console report error:', error);
-    res.status(500).json({ error: 'Failed to fetch console report', details: error.message });
+    console.error('Superadmin console report error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch console report',
+      details: error.message
+    });
   } finally {
     if (connection) await connection.end();
   }
 });
 
-// Pending reports endpoint
+// Pending reports endpoint - matches report_pending_list.php exactly
 router.get('/pending-reports', async (req, res) => {
   let connection;
   try {
     connection = await mysql.createConnection(dbConfig);
     
-    // Same query as report_pending_list.php
+    // Exact query from report_pending_list.php - NO LIMIT
     const query = `
       SELECT 
-        nursing_patient.${DB_COLUMNS.nursing_patient.cro} as cro,
-        patient_new.${DB_COLUMNS.patient_new.name} as patient_name,
-        patient_new.${DB_COLUMNS.patient_new.amount} as amount,
-        patient_new.${DB_COLUMNS.patient_new.date} as date,
-        doctor.${DB_COLUMNS.doctor.name} as doctor_name,
-        nursing_patient.${DB_COLUMNS.nursing_patient.ct_scan} as ct_scan,
-        nursing_patient.${DB_COLUMNS.nursing_patient.ct_report_date} as ct_report_date,
-        nursing_patient.${DB_COLUMNS.nursing_patient.ct_remark} as ct_remark,
-        nursing_patient.${DB_COLUMNS.nursing_patient.xray} as xray,
-        nursing_patient.${DB_COLUMNS.nursing_patient.xray_report_date} as xray_report_date,
-        nursing_patient.${DB_COLUMNS.nursing_patient.xray_remark} as xray_remark
+        nursing_patient.n_patient_cro as cro,
+        patient_new.patient_name,
+        patient_new.amount,
+        patient_new.date,
+        doctor.dname as doctor_name,
+        nursing_patient.n_patient_ct as ct_scan,
+        nursing_patient.n_patient_ct_report_date as ct_report_date,
+        nursing_patient.n_patient_ct_remark as ct_remark,
+        nursing_patient.n_patient_x_ray as xray,
+        nursing_patient.n_patient_x_ray_report_date as xray_report_date,
+        nursing_patient.n_patient_x_ray_remark as xray_remark,
+        nursing_patient.p_id,
+        patient_new.age,
+        patient_new.gender,
+        patient_new.contact_number as mobile,
+        hospital.h_name as hospital_name
       FROM nursing_patient 
-      JOIN patient_new ON patient_new.${DB_COLUMNS.patient_new.cro} = nursing_patient.${DB_COLUMNS.nursing_patient.cro}
-      LEFT JOIN doctor ON doctor.${DB_COLUMNS.doctor.id} = patient_new.${DB_COLUMNS.patient_new.doctor_name}
-      WHERE nursing_patient.${DB_COLUMNS.nursing_patient.xray} = 'no' 
-         OR nursing_patient.${DB_COLUMNS.nursing_patient.ct_scan} = 'no'
-      ORDER BY nursing_patient.${DB_COLUMNS.nursing_patient.id} DESC
-      LIMIT 1000
+      JOIN patient_new ON patient_new.cro = nursing_patient.n_patient_cro
+      LEFT JOIN doctor ON doctor.d_id = patient_new.doctor_name
+      LEFT JOIN hospital ON hospital.h_id = patient_new.hospital_id
+      WHERE nursing_patient.n_patient_x_ray = 'no' 
+         OR nursing_patient.n_patient_ct = 'no'
+      ORDER BY nursing_patient.p_id DESC
     `;
     
     const [pendingReports] = await connection.execute(query);
@@ -469,35 +556,40 @@ router.get('/pending-reports', async (req, res) => {
   } finally {
     if (connection) await connection.end();
   }
-});
+};
 
-// View reports endpoint
+// View reports endpoint - matches view_report.php exactly
 router.get('/view-reports', async (req, res) => {
   let connection;
   try {
     connection = await mysql.createConnection(dbConfig);
     
-    // Same query as view_report.php
+    // Exact query from view_report.php - NO LIMIT
     const query = `
       SELECT 
-        nursing_patient.${DB_COLUMNS.nursing_patient.cro} as cro,
-        patient_new.${DB_COLUMNS.patient_new.name} as patient_name,
-        patient_new.${DB_COLUMNS.patient_new.amount} as amount,
-        patient_new.${DB_COLUMNS.patient_new.date} as date,
-        doctor.${DB_COLUMNS.doctor.name} as doctor_name,
-        nursing_patient.${DB_COLUMNS.nursing_patient.ct_scan} as ct_scan,
-        nursing_patient.${DB_COLUMNS.nursing_patient.ct_report_date} as ct_report_date,
-        nursing_patient.${DB_COLUMNS.nursing_patient.ct_remark} as ct_remark,
-        nursing_patient.${DB_COLUMNS.nursing_patient.xray} as xray,
-        nursing_patient.${DB_COLUMNS.nursing_patient.xray_report_date} as xray_report_date,
-        nursing_patient.${DB_COLUMNS.nursing_patient.xray_remark} as xray_remark
+        nursing_patient.n_patient_cro as cro,
+        patient_new.patient_name,
+        patient_new.amount,
+        patient_new.date,
+        doctor.dname as doctor_name,
+        nursing_patient.n_patient_ct as ct_scan,
+        nursing_patient.n_patient_ct_report_date as ct_report_date,
+        nursing_patient.n_patient_ct_remark as ct_remark,
+        nursing_patient.n_patient_x_ray as xray,
+        nursing_patient.n_patient_x_ray_report_date as xray_report_date,
+        nursing_patient.n_patient_x_ray_remark as xray_remark,
+        nursing_patient.p_id,
+        patient_new.age,
+        patient_new.gender,
+        patient_new.contact_number as mobile,
+        hospital.h_name as hospital_name
       FROM nursing_patient 
-      JOIN patient_new ON patient_new.${DB_COLUMNS.patient_new.cro} = nursing_patient.${DB_COLUMNS.nursing_patient.cro}
-      LEFT JOIN doctor ON doctor.${DB_COLUMNS.doctor.id} = patient_new.${DB_COLUMNS.patient_new.doctor_name}
-      WHERE nursing_patient.${DB_COLUMNS.nursing_patient.xray} = 'yes' 
-        AND nursing_patient.${DB_COLUMNS.nursing_patient.ct_scan} = 'yes'
-      ORDER BY nursing_patient.${DB_COLUMNS.nursing_patient.id} DESC
-      LIMIT 1000
+      JOIN patient_new ON patient_new.cro = nursing_patient.n_patient_cro
+      LEFT JOIN doctor ON doctor.d_id = patient_new.doctor_name
+      LEFT JOIN hospital ON hospital.h_id = patient_new.hospital_id
+      WHERE nursing_patient.n_patient_x_ray = 'yes' 
+        AND nursing_patient.n_patient_ct = 'yes'
+      ORDER BY nursing_patient.p_id DESC
     `;
     
     const [viewReports] = await connection.execute(query);
@@ -514,40 +606,64 @@ router.get('/view-reports', async (req, res) => {
   } finally {
     if (connection) await connection.end();
   }
-});
+};
 
 router.get('/patient-report', async (req, res) => {
   let connection;
   try {
     const { from_date, to_date } = req.query;
-    const fromDate = from_date || '2024-01-01';
-    const toDate = to_date || '2024-12-31';
     
     connection = await mysql.createConnection(dbConfig);
     
-    // Fixed query with correct column names
-    const query = `
-      SELECT 
-        patient_new.patient_id as p_id,
-        patient_new.cro as cro_number,
-        patient_new.patient_name,
-        doctor.dname as dname,
-        hospital.h_name as h_name,
-        COALESCE(patient_new.amount, 0) as amount,
-        '' as remark,
-        patient_new.date,
-        COALESCE(patient_new.age, 0) as age,
-        COALESCE(patient_new.gender, '') as gender,
-        COALESCE(patient_new.contact_number, '') as mobile
-      FROM patient_new
-      LEFT JOIN hospital ON hospital.h_id = patient_new.hospital_id
-      LEFT JOIN doctor ON doctor.d_id = patient_new.doctor_name
-      WHERE STR_TO_DATE(patient_new.date, '%d-%m-%Y') BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')
-      ORDER BY patient_new.patient_id DESC
-      LIMIT 1000
-    `;
+    let query, params = [];
     
-    const [patients] = await connection.execute(query, [fromDate, toDate]);
+    if (from_date && to_date) {
+      // Date range query
+      query = `
+        SELECT 
+          patient_new.patient_id as p_id,
+          patient_new.cro as cro_number,
+          patient_new.patient_name,
+          doctor.dname as dname,
+          hospital.h_name as h_name,
+          COALESCE(patient_new.amount, 0) as amount,
+          '' as remark,
+          patient_new.date,
+          COALESCE(patient_new.age, 0) as age,
+          COALESCE(patient_new.gender, '') as gender,
+          COALESCE(patient_new.contact_number, '') as mobile
+        FROM patient_new
+        LEFT JOIN hospital ON hospital.h_id = patient_new.hospital_id
+        LEFT JOIN doctor ON doctor.d_id = patient_new.doctor_name
+        WHERE STR_TO_DATE(patient_new.date, '%d-%m-%Y') BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')
+        ORDER BY patient_new.patient_id DESC
+        LIMIT 50000
+      `;
+      params = [from_date, to_date];
+    } else {
+      // Fetch all records by default (50,000 limit)
+      query = `
+        SELECT 
+          patient_new.patient_id as p_id,
+          patient_new.cro as cro_number,
+          patient_new.patient_name,
+          doctor.dname as dname,
+          hospital.h_name as h_name,
+          COALESCE(patient_new.amount, 0) as amount,
+          '' as remark,
+          patient_new.date,
+          COALESCE(patient_new.age, 0) as age,
+          COALESCE(patient_new.gender, '') as gender,
+          COALESCE(patient_new.contact_number, '') as mobile
+        FROM patient_new
+        LEFT JOIN hospital ON hospital.h_id = patient_new.hospital_id
+        LEFT JOIN doctor ON doctor.d_id = patient_new.doctor_name
+        ORDER BY patient_new.patient_id DESC
+        LIMIT 50000
+      `;
+    }
+    
+    const [patients] = await connection.execute(query, params);
     
     res.json({
       success: true,
