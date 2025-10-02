@@ -387,6 +387,29 @@ router.get('/daily-report', async (req, res) => {
     
     const [reports] = await connection.execute(query, [sqlStartDate, sqlEndDate]);
 
+    // Process scan names for each report
+    for (const report of reports) {
+      if (report.scan_type) {
+        const scanIds = report.scan_type.split(',');
+        const scanNames = [];
+        
+        for (const scanId of scanIds) {
+          if (scanId.trim()) {
+            const [scanResult] = await connection.execute(
+              'SELECT s_name FROM scan WHERE s_id = ?',
+              [scanId.trim()]
+            );
+            if (scanResult.length > 0) {
+              scanNames.push(scanResult[0].s_name);
+            }
+          }
+        }
+        
+        report.scan_names = scanNames.join(', ');
+        report.scan_type = scanNames.join(', ');
+      }
+    }
+
     res.json({
       success: true,
       data: reports,
@@ -528,6 +551,29 @@ router.get('/detail-report', async (req, res) => {
     
     const [reports] = await connection.execute(query, [sqlStartDate, sqlEndDate]);
 
+    // Process scan names for each report
+    for (const report of reports) {
+      if (report.scan_type) {
+        const scanIds = report.scan_type.split(',');
+        const scanNames = [];
+        
+        for (const scanId of scanIds) {
+          if (scanId.trim()) {
+            const [scanResult] = await connection.execute(
+              'SELECT s_name FROM scan WHERE s_id = ?',
+              [scanId.trim()]
+            );
+            if (scanResult.length > 0) {
+              scanNames.push(scanResult[0].s_name);
+            }
+          }
+        }
+        
+        report.scan_names = scanNames.join(', ');
+        report.scan_type = scanNames.join(', ');
+      }
+    }
+
     res.json({
       success: true,
       data: reports,
@@ -559,37 +605,72 @@ router.get('/detail-report', async (req, res) => {
   }
 });
 
-// Update console data - date and time fields
+// Update console record - only updates patient_new table
 router.post('/update-console', async (req, res) => {
   let connection;
   try {
     const {
       con_id,
-      added_on,
-      start_time,
-      stop_time
+      scan_date,
+      allot_date,
+      date
     } = req.body;
 
     connection = await mysql.createConnection(dbConfig);
 
-    // Update date and time fields
-    await connection.execute(`
-      UPDATE console SET 
-        added_on = ?,
-        start_time = ?,
-        stop_time = ?
-      WHERE con_id = ?
-    `, [added_on, start_time, stop_time, con_id]);
+    // Get CRO from console record
+    const [consoleRecord] = await connection.execute(
+      'SELECT c_p_cro FROM console WHERE con_id = ?',
+      [con_id]
+    );
+    
+    if (consoleRecord.length === 0) {
+      return res.status(404).json({ error: 'Console record not found' });
+    }
+
+    const cro = consoleRecord[0].c_p_cro;
+    const updateFields = [];
+    const updateValues = [];
+    
+    // Handle date formats based on database requirements
+    if (scan_date) {
+      updateFields.push('scan_date = ?');
+      updateValues.push(scan_date); // Keep YYYY-MM-DD format for scan_date
+    }
+    if (allot_date) {
+      updateFields.push('allot_date = ?');
+      // Convert YYYY-MM-DD to DD-MM-YYYY for allot_date
+      const parts = allot_date.split('-');
+      const formattedAllotDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+      updateValues.push(formattedAllotDate);
+    }
+    if (date) {
+      updateFields.push('date = ?');
+      // Convert YYYY-MM-DD to DD-MM-YYYY for registration date
+      const parts = date.split('-');
+      const formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+      updateValues.push(formattedDate);
+    }
+    
+    if (updateFields.length > 0) {
+      updateValues.push(cro);
+      
+      await connection.execute(`
+        UPDATE patient_new 
+        SET ${updateFields.join(', ')}
+        WHERE cro = ?
+      `, updateValues);
+    }
 
     res.json({
       success: true,
-      message: 'Console record updated successfully'
+      message: 'Patient dates updated successfully'
     });
 
   } catch (error) {
-    console.error('Update console data error:', error);
+    console.error('Update console error:', error);
     res.status(500).json({
-      error: 'Failed to update console data',
+      error: 'Failed to update patient dates',
       details: error.message,
       stack: error.stack,
       body: req.body,

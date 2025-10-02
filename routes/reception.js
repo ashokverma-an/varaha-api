@@ -1718,6 +1718,25 @@ router.get('/reports/doctor', async (req, res) => {
   }
 });
 
+// Time slots endpoint
+router.get('/time-slots', async (req, res) => {
+  let connection;
+  try {
+    connection = await mysql.createConnection(dbConfig);
+    
+    const query = `SELECT time_id, time_slot FROM time_slot2 ORDER BY time_id`;
+    const [timeSlots] = await connection.execute(query);
+    
+    res.json(timeSlots);
+    
+  } catch (error) {
+    console.error('Time slots error:', error);
+    res.status(500).json({ error: 'Failed to fetch time slots', details: error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
 // Patient deletion endpoint
 router.delete('/patients/:id', async (req, res) => {
   let connection;

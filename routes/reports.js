@@ -3,13 +3,161 @@ const mysql = require('mysql2/promise');
 const router = express.Router();
 
 const dbConfig = {
-  host: process.env.DB_HOST || '198.54.121.225',
-      user: process.env.DB_USER || 'varaosrc_api_user',
-      password: process.env.DB_PASSWORD || 'Akshay!@#2025',
-      database: process.env.DB_NAME || 'varaosrc_hospital_api',
-      port: parseInt(process.env.DB_PORT || '3306'),
-      connectTimeout: 30000
+  host: 'localhost',
+  user: 'varaosrc_prc',
+  password: 'PRC!@#456&*(',
+  database: 'varaosrc_hospital_management',
+  port: 3306,
+  connectTimeout: 30000
 };
+
+// Appointment report - matches PHP appoexcel.php exactly
+router.get('/appointment', async (req, res) => {
+  let connection;
+  try {
+    const { date } = req.query;
+    
+    if (!date) {
+      return res.status(400).json({ error: 'Date parameter is required' });
+    }
+
+    connection = await mysql.createConnection(dbConfig);
+
+    // Match PHP query exactly: SELECT * FROM patient_new WHERE allot_date = '$selected_date'
+    const query = `SELECT * FROM patient_new WHERE allot_date = ?`;
+    const [patients] = await connection.execute(query, [date]);
+
+    const appointments = [];
+    let counter = 1;
+
+    for (const patient of patients) {
+      // Get scan names - match PHP logic exactly
+      let scanNames = '';
+      if (patient.scan_type) {
+        const scanIds = patient.scan_type.split(',');
+        for (const scanId of scanIds) {
+          if (scanId.trim()) {
+            const [scanResult] = await connection.execute(
+              'SELECT s_name FROM scan WHERE s_id = ?',
+              [scanId.trim()]
+            );
+            if (scanResult.length > 0) {
+              scanNames += scanResult[0].s_name + ', ';
+            }
+          }
+        }
+        scanNames = scanNames.replace(/, $/, ''); // Remove trailing comma
+      }
+
+      // Get time in - match PHP logic exactly
+      let timeIn = '';
+      if (patient.allot_time) {
+        const timeIds = patient.allot_time.split(',');
+        for (const timeId of timeIds) {
+          if (timeId.trim()) {
+            const [timeResult] = await connection.execute(
+              'SELECT time_slot FROM time_slot2 WHERE time_id = ?',
+              [timeId.trim()]
+            );
+            if (timeResult.length > 0) {
+              timeIn += timeResult[0].time_slot;
+            }
+          }
+        }
+      }
+
+      // Get time out - match PHP logic exactly
+      let timeOut = '';
+      if (patient.allot_time_out) {
+        const timeIds = patient.allot_time_out.split(',');
+        for (const timeId of timeIds) {
+          if (timeId.trim()) {
+            const [timeResult] = await connection.execute(
+              'SELECT time_slot FROM time_slot2 WHERE time_id = ?',
+              [timeId.trim()]
+            );
+            if (timeResult.length > 0) {
+              timeOut += timeResult[0].time_slot;
+            }
+          }
+        }
+      }
+
+      // Determine status and console date - match PHP logic exactly
+      let status = 'Pending';
+      let consoleDate = '';
+      
+      if (patient.scan_status == 3) {
+        status = 'Shared to Console';
+      } else if (patient.scan_status == 1) {
+        status = 'Completed';
+      }
+      
+      // Always try to get console date regardless of status
+      const [consoleResult] = await connection.execute(
+        'SELECT added_on FROM console WHERE c_p_cro = ?',
+        [patient.cro]
+      );
+      if (consoleResult.length > 0) {
+        const rawDate = consoleResult[0].added_on;
+        if (rawDate) {
+          // Handle different date formats
+          if (typeof rawDate === 'string') {
+            // Extract only date part (remove time if present)
+            const dateOnly = rawDate.includes(' ') ? rawDate.split(' ')[0] : rawDate;
+            if (dateOnly.includes('-')) {
+              const parts = dateOnly.split('-');
+              if (parts.length === 3) {
+                // Convert YYYY-MM-DD to DD-MM-YYYY
+                consoleDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+              }
+            }
+          } else if (rawDate instanceof Date) {
+            // Handle Date object
+            const dd = String(rawDate.getDate()).padStart(2, '0');
+            const mm = String(rawDate.getMonth() + 1).padStart(2, '0');
+            const yyyy = rawDate.getFullYear();
+            consoleDate = `${dd}-${mm}-${yyyy}`;
+          }
+        }
+      }
+
+      appointments.push({
+        sno: counter,
+        cro: patient.cro,
+        patient_name: patient.patient_name,
+        age: patient.age,
+        gender: patient.gender,
+        category: patient.category || patient.petient_type,
+        scan_type: patient.scan_type,
+        scan_names: scanNames,
+        total_scan: patient.total_scan || 0,
+        time_in: timeIn,
+        time_out: timeOut,
+        status: status,
+        completed_date: consoleDate
+      });
+
+      counter++;
+    }
+
+    res.json({
+      success: true,
+      data: appointments,
+      total: appointments.length,
+      date: date
+    });
+
+  } catch (error) {
+    console.error('Appointment report error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch appointment report',
+      details: error.message
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
 
 /**
  * @swagger

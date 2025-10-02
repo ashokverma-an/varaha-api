@@ -11,522 +11,560 @@ const dbConfig = {
   connectTimeout: 30000
 };
 
-// Database column mappings
-const DB_COLUMNS = {
-  patient_new: {
-    id: 'patient_id',
-    name: 'patient_name',
-    mobile: 'contact_number',
-    age: 'age',
-    gender: 'gender',
-    date: 'date',
-    amount: 'amount',
-    cro: 'cro',
-    hospital_id: 'hospital_id',
-    doctor_name: 'doctor_name',
-    total_scan: 'total_scan',
-    category: 'category',
-    scan_type: 'scan_type'
-  },
-  doctor: {
-    id: 'd_id',
-    name: 'dname'
-  },
-  hospital: {
-    id: 'h_id',
-    name: 'h_name',
-    short: 'h_short',
-    type: 'h_type',
-    address: 'h_address',
-    contact: 'h_contact'
-  },
-  category: {
-    id: 'cat_id',
-    name: 'cat_name',
-    type: 'cat_type'
-  }
-};
-
-// Patient list endpoint
-router.get('/patient-list', async (req, res) => {
-  let connection;
-  try {
-    const { from_date, to_date } = req.query;
-    const fromDate = from_date || '2024-01-01';
-    const toDate = to_date || '2024-12-31';
-    
-    connection = await mysql.createConnection(dbConfig);
-    
-    const query = `
-      SELECT 
-        patient_new.patient_id as p_id,
-        patient_new.cro as cro_number,
-        patient_new.patient_name,
-        doctor.dname as dname,
-        hospital.h_name as h_name,
-        COALESCE(patient_new.amount, 0) as amount,
-        '' as remark,
-        patient_new.date,
-        COALESCE(patient_new.age, 0) as age,
-        COALESCE(patient_new.gender, '') as gender,
-        COALESCE(patient_new.contact_number, '') as mobile
-      FROM patient_new
-      LEFT JOIN hospital ON hospital.h_id = patient_new.hospital_id
-      LEFT JOIN doctor ON doctor.d_id = patient_new.doctor_name
-      WHERE STR_TO_DATE(patient_new.date, '%d-%m-%Y') BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')
-      ORDER BY patient_new.patient_id DESC
-      LIMIT 1000
-    `;
-    
-    const [patients] = await connection.execute(query, [fromDate, toDate]);
-    
-    res.json({
-      success: true,
-      data: patients,
-      total: Array.isArray(patients) ? patients.length : 0
-    });
-    
-  } catch (error) {
-    console.error('Admin patient list error:', error);
-    res.status(500).json({ error: 'Failed to fetch patient list', details: error.message });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-// Categories endpoint
-router.get('/categories', async (req, res) => {
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    
-    const query = `SELECT * FROM category ORDER BY cat_id DESC`;
-    const [categories] = await connection.execute(query);
-    
-    res.json({
-      success: true,
-      data: categories,
-      total: Array.isArray(categories) ? categories.length : 0
-    });
-    
-  } catch (error) {
-    console.error('Admin categories error:', error);
-    res.status(500).json({ error: 'Failed to fetch categories', details: error.message });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-// Hospitals endpoint
-router.get('/hospitals', async (req, res) => {
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    
-    const query = `SELECT * FROM hospital ORDER BY h_id DESC`;
-    const [hospitals] = await connection.execute(query);
-    
-    res.json({
-      success: true,
-      data: hospitals,
-      total: Array.isArray(hospitals) ? hospitals.length : 0
-    });
-    
-  } catch (error) {
-    console.error('Admin hospitals error:', error);
-    res.status(500).json({ error: 'Failed to fetch hospitals', details: error.message });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-// Daily revenue report endpoint
+// Daily revenue report - matches PHP daily_revenue_report.php exactly
 router.get('/daily-revenue-report', async (req, res) => {
   let connection;
   try {
-    const { from_date, to_date } = req.query;
-    const fromDate = from_date || '2024-01-01';
-    const toDate = to_date || '2024-12-31';
+    const { date, type = 'D' } = req.query; // D = Detail, S = Summary
     
-    connection = await mysql.createConnection(dbConfig);
+    // Default to today's date in DD-MM-YYYY format
+    const today = new Date();
+    const dd = String(today.getDate()).padStart(2, '0');
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const yyyy = today.getFullYear();
+    const todayFormatted = `${dd}-${mm}-${yyyy}`;
     
-    const query = `
-      SELECT 
-        patient_new.date,
-        patient_new.cro,
-        patient_new.patient_name,
-        patient_new.amount,
-        patient_new.category,
-        hospital.h_name as hospital_name,
-        doctor.dname as doctor_name
-      FROM patient_new
-      LEFT JOIN hospital ON hospital.h_id = patient_new.hospital_id
-      LEFT JOIN doctor ON doctor.d_id = patient_new.doctor_name
-      WHERE STR_TO_DATE(patient_new.date, '%d-%m-%Y') BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')
-      ORDER BY patient_new.patient_id DESC
-      LIMIT 1000
-    `;
+    const selectedDate = date || todayFormatted;
     
-    const [revenue] = await connection.execute(query, [fromDate, toDate]);
-    
-    res.json({
-      success: true,
-      data: revenue,
-      total: Array.isArray(revenue) ? revenue.length : 0
-    });
-    
-  } catch (error) {
-    console.error('Admin daily revenue error:', error);
-    res.status(500).json({ error: 'Failed to fetch daily revenue', details: error.message });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
+    // Convert DD-MM-YYYY to YYYY-MM-DD for scan_date queries
+    const parts = selectedDate.split('-');
+    const scanDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
 
-// Patient search endpoint
-router.get('/patients/search', async (req, res) => {
-  let connection;
-  try {
-    const { q } = req.query;
-    
-    if (!q) {
-      return res.status(400).json({ error: 'Query parameter required' });
+    connection = await mysql.createConnection(dbConfig);
+
+    if (type === 'S') {
+      // Summary Report - matches dail_revenue_summary_xls.php
+      const summaryData = await generateSummaryReport(connection, scanDate, selectedDate);
+      res.json({
+        success: true,
+        type: 'summary',
+        data: summaryData,
+        date: selectedDate
+      });
+    } else {
+      // Detail Report - matches dail_revenue_xls.php  
+      const detailData = await generateDetailReport(connection, scanDate, selectedDate);
+      res.json({
+        success: true,
+        type: 'detail', 
+        data: detailData,
+        date: selectedDate
+      });
     }
-    
-    connection = await mysql.createConnection(dbConfig);
-    
-    const query = `
-      SELECT 
-        patient_new.patient_id as p_id,
-        patient_new.cro as cro_number,
-        patient_new.patient_name,
-        doctor.dname as dname,
-        hospital.h_name as h_name,
-        COALESCE(patient_new.amount, 0) as amount,
-        patient_new.date,
-        COALESCE(patient_new.age, 0) as age,
-        COALESCE(patient_new.gender, '') as gender,
-        COALESCE(patient_new.contact_number, '') as mobile,
-        COALESCE(patient_new.address, '') as address,
-        COALESCE(patient_new.category, '') as category,
-        COALESCE(patient_new.scan_type, '') as scan_type,
-        COALESCE(patient_new.remark, '') as remark
-      FROM patient_new
-      LEFT JOIN hospital ON hospital.h_id = patient_new.hospital_id
-      LEFT JOIN doctor ON doctor.d_id = patient_new.doctor_name
-      WHERE patient_new.cro LIKE ? OR patient_new.patient_name LIKE ?
-      ORDER BY patient_new.patient_id DESC
-      LIMIT 10
-    `;
-    
-    const searchTerm = `%${q}%`;
-    const [patients] = await connection.execute(query, [searchTerm, searchTerm]);
-    
-    res.json({
-      success: true,
-      data: patients,
-      total: Array.isArray(patients) ? patients.length : 0
-    });
-    
-  } catch (error) {
-    console.error('Patient search error:', error);
-    res.status(500).json({ error: 'Failed to search patients', details: error.message });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
 
-// Admin stats endpoint (same logic as admin/blank.php)
-router.get('/stats', async (req, res) => {
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    
-    // ✅ Use today's date in dd-mm-yyyy format (dash, same as DB)
-    const now = new Date();
-    const calcuttaTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Calcutta" }));
-    const dd = String(calcuttaTime.getDate()).padStart(2, "0");
-    const mm = String(calcuttaTime.getMonth() + 1).padStart(2, "0"); // Month is 0-based
-    const yyyy = calcuttaTime.getFullYear();
-    const d = `${dd}-${mm}-${yyyy}`;
-    
-    // 1. Today's transactions
-    const [transactionResults] = await connection.execute(
-      'SELECT withdraw, r_amount, d_amount FROM today_transeciton WHERE added_on = ?', [d]
-    );
-    
-    // 2. Today's patient count and total scans
-    const [patientResults] = await connection.execute(
-      'SELECT COUNT(*) as count, SUM(total_scan) as total_scans FROM patient_new WHERE date = ?', [d]
-    );
-    const patientCount = patientResults[0]?.count || 0;
-    const totalScans = patientResults[0]?.total_scans || 0;
-    
-    // Same PHP logic
-    let c = 0; // received
-    let d_amt = 0; // due  
-    let w = 0; // withdraw
-    
-    transactionResults.forEach(r => {
-      w += parseFloat(r.withdraw || 0);
-      c += parseFloat(r.r_amount || 0);
-      d_amt += parseFloat(r.d_amount || 0);
-    });
-    
-    const h = c - d_amt - w; // cash in hand
-    
-    res.json({
-      todayDate: d,              // show date for debugging
-      totalPatients: totalScans, // Patient Registered (total scans)
-      todayPatients: patientCount, // Total MRI (patient count)
-      totalRevenue: c,           // Received Amount
-      todayRevenue: d_amt,       // Due Amount
-      todayWithdraw: w,          // Withdraw
-      cashInHand: h <= 0 ? 0 : h // Cash In Hand
-    });
-    
   } catch (error) {
-    console.error('Admin stats error:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch admin stats',
+    console.error('Admin daily revenue report error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch daily revenue report',
       details: error.message
     });
   } finally {
     if (connection) await connection.end();
   }
 });
-// Patient create endpoint
-router.post('/patients', async (req, res) => {
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    
-    const {
-      patient_name, age, gender, contact_number, address,
-      hospital_name, doctor_name, category, amount, date,
-      allot_date, allot_time, scan_type, remark
-    } = req.body;
-    
-    // Generate CRO number
-    const today = new Date();
-    const dateStr = today.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
-    
-    // Get next sequence number for today
-    const [countResult] = await connection.execute(
-      'SELECT COUNT(*) as count FROM patient_new WHERE date = ?', [dateStr]
+
+// Generate Detail Report - matches PHP dail_revenue_xls.php exactly
+async function generateDetailReport(connection, scanDate, selectedDate) {
+  const reportData = [];
+  let cIs = '';
+  
+  // 1. Sn. CITIZEN Category
+  const [seniorCitizenGroups] = await connection.execute(`
+    SELECT category, scan_type, hospital_id, 
+           IF(hospital_id > 11, 
+              IF(hospital_id = 14, CONCAT(category, hospital_id), category), 
+              CONCAT(category, hospital_id)
+           ) as ch  
+    FROM patient_new 
+    WHERE scan_date = ? AND category IN ('Sn. CITIZEN') AND scan_status = 1  
+    GROUP BY hospital_id, category, scan_type  
+    ORDER BY FIELD(category, 'Sn. CITIZEN') ASC, 
+             FIELD(hospital_id, 10,9,11,12,14,15,16,17,18,19,20) ASC, 
+             LENGTH(scan_type) DESC
+  `, [scanDate]);
+  
+  for (const group of seniorCitizenGroups) {
+    if (cIs !== group.ch) {
+      cIs = group.ch;
+      const tableData = await generateTableForGroup(connection, group, scanDate, selectedDate);
+      reportData.push(tableData);
+    }
+  }
+  
+  // 2. MDM/MGH Category Wise
+  const [mdmGroups] = await connection.execute(`
+    SELECT category, scan_type, hospital_id, CONCAT(category, hospital_id) as ch, 
+           LENGTH(scan_type) - LENGTH(REPLACE(scan_type, ',', '')) as len  
+    FROM patient_new 
+    WHERE scan_date = ? AND category IN ('RTA','OPD FREE','IPD FREE','Chiranjeevi', 'RGHS','Destitute', 'PRISONER') 
+          AND scan_status = 1 AND hospital_id IN (10,9) 
+    GROUP BY ch, scan_type  
+    ORDER BY FIELD(hospital_id, 10,9) ASC, 
+             FIELD(category,'RTA','OPD FREE','IPD FREE','Chiranjeevi', 'RGHS','Destitute', 'PRISONER'), 
+             len DESC
+  `, [scanDate]);
+  
+  cIs = '';
+  for (const group of mdmGroups) {
+    if (cIs !== group.ch) {
+      cIs = group.ch;
+      const tableData = await generateTableForGroup(connection, group, scanDate, selectedDate);
+      reportData.push(tableData);
+    }
+  }
+  
+  // 3. Aayushmaan Category
+  const [aayushmaanGroups] = await connection.execute(`
+    SELECT category, scan_type, hospital_id, 
+           IF(hospital_id > 11, 
+              IF(hospital_id = 14, CONCAT(category, hospital_id), category), 
+              CONCAT(category, hospital_id)
+           ) as ch  
+    FROM patient_new 
+    WHERE scan_date = ? AND category IN ('Aayushmaan') AND scan_status = 1  
+    GROUP BY hospital_id, category, scan_type  
+    ORDER BY FIELD(category, 'Aayushmaan') ASC, 
+             FIELD(hospital_id, 10,9,11,12,14,15,16,17,18,19,20) ASC, 
+             LENGTH(scan_type) DESC
+  `, [scanDate]);
+  
+  cIs = '';
+  for (const group of aayushmaanGroups) {
+    if (cIs !== group.ch) {
+      cIs = group.ch;
+      const tableData = await generateTableForGroup(connection, group, scanDate, selectedDate);
+      reportData.push(tableData);
+    }
+  }
+  
+  // 4. UMAID HOSPITAL ALL
+  const [umaidGroups] = await connection.execute(`
+    SELECT category, scan_type, hospital_id, CONCAT(category, hospital_id) as ch    
+    FROM patient_new 
+    WHERE scan_date = ? AND scan_status = 1 AND hospital_id IN (11) AND category != 'Sn. CITIZEN' 
+    GROUP BY hospital_id, scan_type  
+    ORDER BY hospital_id ASC, 
+             FIELD(category,'RTA','OPD FREE','IPD FREE','Chiranjeevi', 'RGHS','Destitute', 'PRISONER') ASC,  
+             LENGTH(scan_type) DESC
+  `, [scanDate]);
+  
+  cIs = '';
+  for (const group of umaidGroups) {
+    if (cIs !== group.ch) {
+      cIs = group.ch;
+      const tableData = await generateTableForGroup(connection, group, scanDate, selectedDate);
+      reportData.push(tableData);
+    }
+  }
+  
+  // 5. Other Govt. Hospital All
+  const [otherGovtGroups] = await connection.execute(`
+    SELECT category, scan_type, hospital_id, CONCAT(category, hospital_id) as ch    
+    FROM patient_new 
+    WHERE scan_date = ? AND scan_status = 1 AND hospital_id IN (11, 12,15,16,17,18,19,20) 
+          AND category IN ('RTA','IPD FREE','Chiranjeevi', 'RGHS', 'PRISONER') 
+    GROUP BY category, scan_type  
+    ORDER BY FIELD(category,'RTA','OPD FREE','IPD FREE','Chiranjeevi', 'RGHS', 'PRISONER') ASC,  
+             LENGTH(scan_type) DESC
+  `, [scanDate]);
+  
+  cIs = '';
+  for (const group of otherGovtGroups) {
+    if (cIs !== group.category) {
+      cIs = group.category;
+      const tableData = await generateTableForGroup(connection, group, scanDate, selectedDate, 'Other GOVT. HOSPITAL');
+      reportData.push(tableData);
+    }
+  }
+  
+  // 6. Other Private Hospital All
+  const [otherPrivateGroups] = await connection.execute(`
+    SELECT category, scan_type, hospital_id    
+    FROM patient_new 
+    WHERE scan_date = ? AND scan_status = 1 AND hospital_id IN (14,16) AND category != 'GEN / Paid' 
+    GROUP BY category, scan_type  
+    ORDER BY FIELD(category,'RTA','OPD FREE','IPD FREE','Chiranjeevi', 'RGHS','Destitute', 'PRISONER') ASC,  
+             LENGTH(scan_type) DESC
+  `, [scanDate]);
+  
+  for (const group of otherPrivateGroups) {
+    const tableData = await generateTableForGroup(connection, group, scanDate, selectedDate, 'OTHER HOSPITAL');
+    reportData.push(tableData);
+  }
+  
+  // 7. GEN / Paid Govt. Hospital All
+  const [genPaidGroups] = await connection.execute(`
+    SELECT category, scan_type, hospital_id    
+    FROM patient_new 
+    WHERE scan_date = ? AND scan_status = 1 AND category = 'GEN / Paid'  
+    ORDER BY LENGTH(scan_type) DESC 
+    LIMIT 1
+  `, [scanDate]);
+  
+  for (const group of genPaidGroups) {
+    const tableData = await generateTableForGroup(connection, group, scanDate, selectedDate, 'MDM/Other Govt. Hospital');
+    reportData.push(tableData);
+  }
+  
+  return reportData;
+}
+
+// Generate table for each group - matches PHP structure exactly
+async function generateTableForGroup(connection, group, scanDate, selectedDate, customHospitalName = null) {
+  const scanTypeArray = group.scan_type.split(',');
+  
+  // Get hospital information
+  let hospitalInfo = { h_short: customHospitalName || 'Unknown' };
+  if (!customHospitalName && group.hospital_id) {
+    const [hospitalResult] = await connection.execute(
+      'SELECT * FROM hospital WHERE h_id = ?',
+      [group.hospital_id]
     );
-    const sequence = (countResult[0]?.count || 0) + 1;
-    const cro = `VDC/${dateStr}/${sequence.toString().padStart(3, '0')}`;
+    if (hospitalResult.length > 0) {
+      hospitalInfo = hospitalResult[0];
+    }
+  }
+  
+  // Get patient data for this group
+  let patientQuery = `
+    SELECT patient_id, scan_date, examination_id, cro, patient_name, age, gender, 
+           category, scan_type, total_scan, amount, amount_reci, contact_number, dname as doctor  
+    FROM patient_new 
+    left join hospital on patient_new.hospital_id = hospital.h_id
+    left join doctor on patient_new.doctor_name = doctor.d_id
+    WHERE scan_date = ? AND category = ? AND scan_status = 1
+  `;
+  
+  const queryParams = [scanDate, group.category];
+  
+  if (group.hospital_id && !customHospitalName) {
+    patientQuery += ' AND hospital_id = ?';
+    queryParams.push(group.hospital_id);
+  }
+  
+  patientQuery += ' ORDER BY category, patient_id';
+  
+  const [patients] = await connection.execute(patientQuery, queryParams);
+  
+  const processedPatients = [];
+  let totalScans = 0;
+  let totalAmount = 0;
+  
+  for (let i = 0; i < patients.length; i++) {
+    const patient = patients[i];
     
-    const query = `
-      INSERT INTO patient_new (
-        cro, patient_name, age, gender, contact_number, address,
-        hospital_id, doctor_name, category, amount, date,
-        allot_date, allot_time, scan_type, remark, total_scan
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-    `;
+    // Get scan details - handle comma-separated scan IDs safely
+    let scanResults = [];
+    if (patient.scan_type) {
+      const scanIds = patient.scan_type.split(',').map(id => id.trim()).filter(id => id);
+      if (scanIds.length > 0) {
+        const placeholders = scanIds.map(() => '?').join(',');
+        const [results] = await connection.execute(
+          `SELECT * FROM scan WHERE s_id IN (${placeholders})`,
+          scanIds
+        );
+        scanResults = results;
+      }
+    }
     
-    const [result] = await connection.execute(query, [
-      cro, patient_name, age, gender, contact_number, address,
-      hospital_name, doctor_name, category, amount, date,
-      allot_date, allot_time, scan_type, remark
-    ]);
+    const scanNames = [];
+    let patientTotalScans = 0;
+    let patientAmount = 0;
     
-    res.json({
-      success: true,
-      message: 'Patient registered successfully',
-      data: { patient_id: result.insertId, cro }
+    for (const scan of scanResults) {
+      scanNames.push(scan.s_name);
+      patientTotalScans += scan.total_scan || 0;
+      patientAmount += scan.charges || 0;
+    }
+    
+    // For GEN/Paid category, use amount from patient record
+    if (group.category === 'GEN / Paid') {
+      patientAmount = patient.amount || 0;
+    }
+    
+    processedPatients.push({
+      sno: i + 1,
+      date: selectedDate,
+      cro: patient.cro,
+      patientId: patient.examination_id,
+      patientName: patient.patient_name,
+      age: (patient.age || '').toString().replace('ear', ''),
+      gender: (patient.gender || '').substring(0, 1),
+      scanNames: scanNames,
+      totalScans: patientTotalScans,
+      amount: patientAmount,
+      category: patient.category,
+      mobile: patient.mobile || '',
+      doctor: patient.doctor || ''
     });
     
-  } catch (error) {
-    console.error('Patient create error:', error);
-    res.status(500).json({ error: 'Failed to create patient', details: error.message });
-  } finally {
-    if (connection) await connection.end();
+    totalScans += patientTotalScans;
+    totalAmount += patientAmount;
   }
-});
+  
+  return {
+    hospitalName: hospitalInfo.h_short,
+    category: group.category,
+    date: selectedDate,
+    scanColumns: scanTypeArray.length,
+    patients: processedPatients,
+    totals: {
+      totalScans,
+      totalAmount
+    }
+  };
+}
 
-// Hospital CRUD endpoints
-router.post('/hospitals', async (req, res) => {
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    const { h_name, h_short, h_address, h_contact, h_type } = req.body;
-    
-    const query = 'INSERT INTO hospital (h_name, h_short, h_address, h_contact, h_type) VALUES (?, ?, ?, ?, ?)';
-    const [result] = await connection.execute(query, [h_name, h_short, h_address, h_contact, h_type || 'General']);
-    
-    res.json({ success: true, message: 'Hospital created successfully', data: { h_id: result.insertId } });
-  } catch (error) {
-    console.error('Hospital create error:', error);
-    res.status(500).json({ error: 'Failed to create hospital', details: error.message });
-  } finally {
-    if (connection) await connection.end();
+// Generate Summary Report - matches PHP dail_revenue_summary_xls.php
+async function generateSummaryReport(connection, scanDate, selectedDate) {
+  const summaryData = [];
+  let cIs = '';
+  
+  // 1. Sn. CITIZEN and RTA categories
+  const [seniorCitizenRTAGroups] = await connection.execute(`
+    SELECT category, scan_type, hospital_id, CONCAT(category, hospital_id) as ch  
+    FROM patient_new 
+    WHERE scan_date = ? AND scan_status = 1 AND category IN ('Sn. CITIZEN', 'RTA') 
+    GROUP BY hospital_id, category, scan_type 
+    ORDER BY FIELD(hospital_id, 10,9,11,12,14,15,16,17,18,19,20) ASC, 
+             FIELD(category,'Sn. CITIZEN','RTA') ASC,  
+             LENGTH(scan_type) DESC
+  `, [scanDate]);
+  
+  for (const group of seniorCitizenRTAGroups) {
+    if (cIs !== group.ch) {
+      cIs = group.ch;
+      const summaryGroup = await generateSummaryForGroup(connection, group, scanDate, selectedDate);
+      if (summaryGroup) summaryData.push(summaryGroup);
+    }
   }
-});
-
-router.put('/hospitals/:id', async (req, res) => {
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    const { id } = req.params;
-    const { h_name, h_short, h_address, h_contact, h_type } = req.body;
-    
-    const query = 'UPDATE hospital SET h_name = ?, h_short = ?, h_address = ?, h_contact = ?, h_type = ? WHERE h_id = ?';
-    await connection.execute(query, [h_name, h_short, h_address, h_contact, h_type || 'General', id]);
-    
-    res.json({ success: true, message: 'Hospital updated successfully' });
-  } catch (error) {
-    console.error('Hospital update error:', error);
-    res.status(500).json({ error: 'Failed to update hospital', details: error.message });
-  } finally {
-    if (connection) await connection.end();
+  
+  // 2. OPD, IPD, etc for hospital_id = 10
+  cIs = '';
+  const [mdmGroups] = await connection.execute(`
+    SELECT category, scan_type, hospital_id  
+    FROM patient_new 
+    WHERE scan_date = ? AND scan_status = 1 AND category IN ('OPD FREE', 'IPD FREE', 'Chiranjeevi', 'RGHS','Destitute', 'PRISONER') 
+          AND hospital_id = 10 
+    GROUP BY category, scan_type 
+    ORDER BY FIELD(category,'OPD FREE', 'IPD FREE', 'Chiranjeevi', 'RGHS','Destitute', 'PRISONER') ASC, 
+             LENGTH(scan_type) DESC
+  `, [scanDate]);
+  
+  for (const group of mdmGroups) {
+    if (cIs !== group.category) {
+      cIs = group.category;
+      const summaryGroup = await generateSummaryForGroup(connection, group, scanDate, selectedDate);
+      if (summaryGroup) summaryData.push(summaryGroup);
+    }
   }
-});
-
-router.delete('/hospitals/:id', async (req, res) => {
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    const { id } = req.params;
-    
-    const query = 'DELETE FROM hospital WHERE h_id = ?';
-    await connection.execute(query, [id]);
-    
-    res.json({ success: true, message: 'Hospital deleted successfully' });
-  } catch (error) {
-    console.error('Hospital delete error:', error);
-    res.status(500).json({ error: 'Failed to delete hospital', details: error.message });
-  } finally {
-    if (connection) await connection.end();
+  
+  // 3. Aayushmaan for hospital_id = 10
+  cIs = '';
+  const [aayushmaanGroups] = await connection.execute(`
+    SELECT category, scan_type, hospital_id  
+    FROM patient_new 
+    WHERE scan_date = ? AND scan_status = 1 AND category IN ('Aayushmaan') AND hospital_id = 10 
+    GROUP BY category, scan_type 
+    ORDER BY FIELD(category,'Aayushmaan') ASC, LENGTH(scan_type) DESC
+  `, [scanDate]);
+  
+  for (const group of aayushmaanGroups) {
+    if (cIs !== group.category) {
+      cIs = group.category;
+      const summaryGroup = await generateSummaryForGroup(connection, group, scanDate, selectedDate);
+      if (summaryGroup) summaryData.push(summaryGroup);
+    }
   }
-});
-
-// Category CRUD endpoints
-router.post('/categories', async (req, res) => {
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    const { cat_name, cat_type } = req.body;
-    
-    const query = 'INSERT INTO category (cat_name, cat_type) VALUES (?, ?)';
-    const [result] = await connection.execute(query, [cat_name, cat_type]);
-    
-    res.json({ success: true, message: 'Category created successfully', data: { cat_id: result.insertId } });
-  } catch (error) {
-    console.error('Category create error:', error);
-    res.status(500).json({ error: 'Failed to create category', details: error.message });
-  } finally {
-    if (connection) await connection.end();
+  
+  // 4. Aayushmaan for hospital_id = 9
+  cIs = '';
+  const [aayushmaan9Groups] = await connection.execute(`
+    SELECT category, scan_type, hospital_id  
+    FROM patient_new 
+    WHERE scan_date = ? AND scan_status = 1 AND category IN ('Aayushmaan') AND hospital_id = 9 
+    GROUP BY category, scan_type 
+    ORDER BY FIELD(category,'Aayushmaan') ASC, LENGTH(scan_type) DESC
+  `, [scanDate]);
+  
+  for (const group of aayushmaan9Groups) {
+    if (cIs !== group.category) {
+      cIs = group.category;
+      const summaryGroup = await generateSummaryForGroup(connection, group, scanDate, selectedDate);
+      if (summaryGroup) summaryData.push(summaryGroup);
+    }
   }
-});
-
-router.put('/categories/:id', async (req, res) => {
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    const { id } = req.params;
-    const { cat_name, cat_type } = req.body;
-    
-    const query = 'UPDATE category SET cat_name = ?, cat_type = ? WHERE cat_id = ?';
-    await connection.execute(query, [cat_name, cat_type, id]);
-    
-    res.json({ success: true, message: 'Category updated successfully' });
-  } catch (error) {
-    console.error('Category update error:', error);
-    res.status(500).json({ error: 'Failed to update category', details: error.message });
-  } finally {
-    if (connection) await connection.end();
+  
+  // 5. MDM ALL for hospital_id = 9
+  cIs = '';
+  const [mdm9Groups] = await connection.execute(`
+    SELECT category, scan_type, hospital_id  
+    FROM patient_new 
+    WHERE scan_date = ? AND scan_status = 1 AND category IN ('OPD FREE', 'IPD FREE', 'Chiranjeevi', 'RGHS','Destitute', 'PRISONER') 
+          AND hospital_id IN (9) 
+    GROUP BY category, scan_type 
+    ORDER BY FIELD(category,'OPD FREE', 'IPD FREE', 'Chiranjeevi', 'RGHS','Destitute', 'PRISONER') ASC, 
+             LENGTH(scan_type) DESC
+  `, [scanDate]);
+  
+  for (const group of mdm9Groups) {
+    if (cIs !== group.category) {
+      cIs = group.category;
+      const summaryGroup = await generateSummaryForGroup(connection, group, scanDate, selectedDate);
+      if (summaryGroup) summaryData.push(summaryGroup);
+    }
   }
-});
-
-router.delete('/categories/:id', async (req, res) => {
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    const { id } = req.params;
-    
-    const query = 'DELETE FROM category WHERE cat_id = ?';
-    await connection.execute(query, [id]);
-    
-    res.json({ success: true, message: 'Category deleted successfully' });
-  } catch (error) {
-    console.error('Category delete error:', error);
-    res.status(500).json({ error: 'Failed to delete category', details: error.message });
-  } finally {
-    if (connection) await connection.end();
+  
+  // 6. UMAID HOSPITAL ALL
+  cIs = '';
+  const [umaidGroups] = await connection.execute(`
+    SELECT category, scan_type, hospital_id, CONCAT(category, hospital_id) as ch   
+    FROM patient_new 
+    WHERE scan_date = ? AND scan_status = 1 AND category IN ('OPD FREE', 'IPD FREE', 'Chiranjeevi', 'RGHS','Destitute', 'PRISONER') 
+          AND hospital_id IN (11) 
+    GROUP BY category, scan_type 
+    ORDER BY FIELD(category,'OPD FREE', 'IPD FREE', 'Chiranjeevi', 'RGHS','Destitute', 'PRISONER') ASC, 
+             LENGTH(scan_type) DESC
+  `, [scanDate]);
+  
+  for (const group of umaidGroups) {
+    if (cIs !== group.ch) {
+      cIs = group.ch;
+      const summaryGroup = await generateSummaryForGroup(connection, group, scanDate, selectedDate);
+      if (summaryGroup) summaryData.push(summaryGroup);
+    }
   }
-});
-
-// Patient update endpoint
-router.put('/patients/:id', async (req, res) => {
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    const { id } = req.params;
-    const { patient_name, age, gender, mobile, address, amount, remark } = req.body;
-    
-    const query = `
-      UPDATE patient_new 
-      SET patient_name = ?, age = ?, gender = ?, contact_number = ?, address = ?, amount = ?, remark = ?
-      WHERE patient_id = ?
-    `;
-    
-    await connection.execute(query, [patient_name, age, gender, mobile, address, amount, remark, id]);
-    
-    res.json({ success: true, message: 'Patient updated successfully' });
-  } catch (error) {
-    console.error('Patient update error:', error);
-    res.status(500).json({ error: 'Failed to update patient', details: error.message });
-  } finally {
-    if (connection) await connection.end();
+  
+  // 7. Other Govt. HOSPITAL ALL
+  cIs = '';
+  const [otherGovtGroups] = await connection.execute(`
+    SELECT category, scan_type, hospital_id, CONCAT(category, hospital_id) as ch  
+    FROM patient_new 
+    WHERE scan_date = ? AND scan_status = 1 AND category IN ('RTA', 'OPD FREE', 'IPD FREE', 'Chiranjeevi', 'RGHS','Destitute', 'PRISONER') 
+          AND hospital_id IN (12, 15, 16, 18, 19, 20) 
+    GROUP BY hospital_id, category, scan_type 
+    ORDER BY FIELD(hospital_id, 12, 15, 16, 18, 19, 20) ASC, 
+             FIELD(category, 'RTA', 'OPD FREE', 'IPD FREE', 'Chiranjeevi', 'RGHS','Destitute', 'PRISONER') ASC, 
+             LENGTH(scan_type) DESC
+  `, [scanDate]);
+  
+  for (const group of otherGovtGroups) {
+    if (cIs !== group.ch) {
+      cIs = group.ch;
+      const summaryGroup = await generateSummaryForGroup(connection, group, scanDate, selectedDate);
+      if (summaryGroup) summaryData.push(summaryGroup);
+    }
   }
-});
-
-// Doctors endpoint
-router.get('/doctors', async (req, res) => {
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
-    
-    const query = `SELECT * FROM doctor ORDER BY d_id DESC`;
-    const [doctors] = await connection.execute(query);
-    
-    res.json(doctors);
-    
-  } catch (error) {
-    console.error('Admin doctors error:', error);
-    res.status(500).json({ error: 'Failed to fetch doctors', details: error.message });
-  } finally {
-    if (connection) await connection.end();
+  
+  // 8. Other Pvt. HOSPITAL ALL
+  cIs = '';
+  const [otherPvtGroups] = await connection.execute(`
+    SELECT category, scan_type, hospital_id  
+    FROM patient_new 
+    WHERE scan_date = ? AND scan_status = 1 AND category IN ('Sn. CITIZEN', 'RTA', 'OPD FREE', 'IPD FREE', 'Chiranjeevi', 'RGHS','Destitute', 'PRISONER') 
+          AND hospital_id IN (14) 
+    GROUP BY category, scan_type 
+    ORDER BY FIELD(category,'Sn. CITIZEN', 'RTA', 'OPD FREE', 'IPD FREE', 'Chiranjeevi', 'RGHS','Destitute', 'PRISONER') ASC, 
+             LENGTH(scan_type) DESC
+  `, [scanDate]);
+  
+  for (const group of otherPvtGroups) {
+    if (cIs !== group.hospital_id) {
+      cIs = group.hospital_id;
+      const summaryGroup = await generateSummaryForGroup(connection, group, scanDate, selectedDate);
+      if (summaryGroup) summaryData.push(summaryGroup);
+    }
   }
-});
+  
+  return summaryData;
+}
 
-// Scans endpoint
-router.get('/scans', async (req, res) => {
-  let connection;
-  try {
-    connection = await mysql.createConnection(dbConfig);
+// Generate summary data for a specific group - matches PHP aggregation logic
+async function generateSummaryForGroup(connection, group, scanDate, selectedDate) {
+  // Get hospital information
+  let hospitalInfo = { h_short: 'Unknown' };
+  if (group.hospital_id) {
+    const [hospitalResult] = await connection.execute(
+      'SELECT h_short FROM hospital WHERE h_id = ?',
+      [group.hospital_id]
+    );
+    if (hospitalResult.length > 0) {
+      hospitalInfo = hospitalResult[0];
+    }
+  }
+  
+  // Get aggregated summary data by scan_type
+  const [summaryResults] = await connection.execute(`
+    SELECT COUNT(*) as cnt, scan_type, SUM(total_scan) as s_scan, SUM(amount) as s_amt, SUM(amount_reci) as s_amt_rec 
+    FROM patient_new 
+    WHERE scan_date = ? AND hospital_id = ? AND category = ? AND scan_status = 1 
+    GROUP BY scan_type
+  `, [scanDate, group.hospital_id, group.category]);
+  
+  if (summaryResults.length === 0) return null;
+  
+  const summaryRows = [];
+  let totalPatients = 0;
+  let totalScans = 0;
+  let totalAmount = 0;
+  
+  for (const sumRow of summaryResults) {
+    // Get scan details
+    const scanIds = sumRow.scan_type.split(',').map(id => id.trim()).filter(id => id);
+    let scanResults = [];
     
-    const query = `SELECT * FROM scan ORDER BY s_id DESC`;
-    const [scans] = await connection.execute(query);
+    if (scanIds.length > 0) {
+      const placeholders = scanIds.map(() => '?').join(',');
+      const [results] = await connection.execute(
+        `SELECT s_name, charges, total_scan FROM scan WHERE s_id IN (${placeholders})`,
+        scanIds
+      );
+      scanResults = results;
+    }
     
-    res.json({
-      success: true,
-      data: scans,
-      total: Array.isArray(scans) ? scans.length : 0
+    const scanNames = [];
+    let rate = 0;
+    let totalPatientScans = 0;
+    
+    for (const scan of scanResults) {
+      scanNames.push(scan.s_name);
+      rate += scan.charges || 0;
+      totalPatientScans += scan.total_scan || 0;
+    }
+    
+    // Fill remaining scan name slots with '..'
+    while (scanNames.length < 8) {
+      scanNames.push('..');
+    }
+    
+    const numberOfScans = totalPatientScans * sumRow.cnt;
+    const rowAmount = rate * sumRow.cnt;
+    
+    summaryRows.push({
+      scanNames: scanNames,
+      scanCode: sumRow.scan_type.replace(/,/g, ' + '),
+      numberOfScans: numberOfScans,
+      patientCount: sumRow.cnt,
+      rate: rate,
+      amount: rowAmount
     });
     
-  } catch (error) {
-    console.error('Admin scans error:', error);
-    res.status(500).json({ error: 'Failed to fetch scans', details: error.message });
-  } finally {
-    if (connection) await connection.end();
+    totalPatients += sumRow.cnt;
+    totalScans += numberOfScans;
+    totalAmount += rowAmount;
   }
-});
+  
+  return {
+    hospitalName: hospitalInfo.h_short,
+    category: group.category,
+    date: selectedDate,
+    summaryRows: summaryRows,
+    totals: {
+      totalPatients,
+      totalScans,
+      totalAmount
+    }
+  };
+}
 
 module.exports = router;
