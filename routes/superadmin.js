@@ -514,7 +514,7 @@ router.get('/pending-reports', async (req, res) => {
   try {
     connection = await mysql.createConnection(dbConfig);
     
-    // Exact query from report_pending_list.php - NO LIMIT
+    // Exact query from report_pending_list.php - NO LIMIT with date formatting
     const query = `
       SELECT 
         nursing_patient.n_patient_cro as cro,
@@ -523,10 +523,10 @@ router.get('/pending-reports', async (req, res) => {
         patient_new.date,
         doctor.dname as doctor_name,
         nursing_patient.n_patient_ct as ct_scan,
-        nursing_patient.n_patient_ct_report_date as ct_report_date,
+        DATE_FORMAT(nursing_patient.n_patient_ct_report_date, '%d-%m-%Y') as ct_report_date,
         nursing_patient.n_patient_ct_remark as ct_remark,
         nursing_patient.n_patient_x_ray as xray,
-        nursing_patient.n_patient_x_ray_report_date as xray_report_date,
+        DATE_FORMAT(nursing_patient.n_patient_x_ray_report_date, '%d-%m-%Y') as xray_report_date,
         nursing_patient.n_patient_x_ray_remark as xray_remark,
         nursing_patient.p_id,
         patient_new.age,
@@ -556,7 +556,7 @@ router.get('/pending-reports', async (req, res) => {
   } finally {
     if (connection) await connection.end();
   }
-};
+});
 
 // View reports endpoint - matches view_report.php exactly
 router.get('/view-reports', async (req, res) => {
@@ -606,7 +606,7 @@ router.get('/view-reports', async (req, res) => {
   } finally {
     if (connection) await connection.end();
   }
-};
+});
 
 router.get('/patient-report', async (req, res) => {
   let connection;
@@ -624,7 +624,7 @@ router.get('/patient-report', async (req, res) => {
           patient_new.patient_id as p_id,
           patient_new.cro as cro_number,
           patient_new.patient_name,
-          doctor.dname as dname,
+          COALESCE(doctor.dname, doctor.doctor_name, 'Unknown Doctor') as dname,
           hospital.h_name as h_name,
           COALESCE(patient_new.amount, 0) as amount,
           '' as remark,
@@ -647,7 +647,7 @@ router.get('/patient-report', async (req, res) => {
           patient_new.patient_id as p_id,
           patient_new.cro as cro_number,
           patient_new.patient_name,
-          doctor.dname as dname,
+          COALESCE(doctor.dname, doctor.doctor_name, 'Unknown Doctor') as dname,
           hospital.h_name as h_name,
           COALESCE(patient_new.amount, 0) as amount,
           '' as remark,
@@ -678,5 +678,136 @@ router.get('/patient-report', async (req, res) => {
     if (connection) await connection.end();
   }
 });
+
+// Doctor Scan Report - Get comprehensive doctor scan reports
+router.get('/doctor-scan-report', async (req, res) => {
+  let connection;
+  try {
+    const { doctor_id, scan_head_id, from_date, to_date } = req.query;
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    // Build WHERE clause
+    let whereClause = 'WHERE np.n_patient_ct = "yes" AND np.n_patient_x_ray = "yes"';
+    const queryParams = [];
+    
+    if (doctor_id) {
+      whereClause += ' AND np.ct_scan_doctor_id = ?';
+      queryParams.push(doctor_id);
+    }
+    
+    if (scan_head_id) {
+      whereClause += ' AND sh.id = ?';
+      queryParams.push(scan_head_id);
+    }
+    
+    if (from_date && to_date) {
+      whereClause += ' AND DATE(FROM_UNIXTIME(np.added_on)) BETWEEN ? AND ?';
+      queryParams.push(from_date, to_date);
+    } else if (from_date) {
+      whereClause += ' AND DATE(FROM_UNIXTIME(np.added_on)) >= ?';
+      queryParams.push(from_date);
+    } else if (to_date) {
+      whereClause += ' AND DATE(FROM_UNIXTIME(np.added_on)) <= ?';
+      queryParams.push(to_date);
+    }
+    
+    // Main query to get detailed reports
+    const detailQuery = `
+      SELECT 
+        np.ct_scan_doctor_id as doctor_id,
+        csd.doctor_name,
+        p.cro as patient_cro,
+        p.patient_name,
+        p.scan_type as scan_types,
+        p.category,
+        DATE_FORMAT(FROM_UNIXTIME(np.added_on), '%d-%m-%Y') as report_date,
+        GROUP_CONCAT(DISTINCT s.s_name SEPARATOR ', ') as scan_names,
+        GROUP_CONCAT(DISTINCT sh.head_name SEPARATOR ', ') as scan_head_names,
+        SUM(sh.amount) as total_amount
+      FROM nursing_patient np
+      JOIN patient_new p ON p.cro = np.n_patient_cro
+      LEFT JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
+      LEFT JOIN scan s ON FIND_IN_SET(s.s_id, p.scan_type)
+      LEFT JOIN scan_heads sh ON s.scan_head_id = sh.id
+      ${whereClause}
+      AND np.ct_scan_doctor_id IS NOT NULL
+      AND sh.amount IS NOT NULL
+      GROUP BY np.n_patient_cro, np.ct_scan_doctor_id
+      ORDER BY np.added_on DESC
+    `;
+    
+    const [reports] = await connection.execute(detailQuery, queryParams);
+    
+    // Summary by doctor
+    const doctorSummaryQuery = `
+      SELECT 
+        csd.doctor_name,
+        COUNT(DISTINCT np.n_patient_cro) as report_count,
+        SUM(sh.amount) as total_amount
+      FROM nursing_patient np
+      JOIN patient_new p ON p.cro = np.n_patient_cro
+      LEFT JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
+      LEFT JOIN scan s ON FIND_IN_SET(s.s_id, p.scan_type)
+      LEFT JOIN scan_heads sh ON s.scan_head_id = sh.id
+      ${whereClause}
+      AND np.ct_scan_doctor_id IS NOT NULL
+      AND sh.amount IS NOT NULL
+      GROUP BY np.ct_scan_doctor_id, csd.doctor_name
+      ORDER BY total_amount DESC
+    `;
+    
+    const [doctorSummary] = await connection.execute(doctorSummaryQuery, queryParams);
+    
+    // Summary by scan head
+    const headSummaryQuery = `
+      SELECT 
+        sh.head_name,
+        COUNT(DISTINCT np.ct_scan_doctor_id) as doctor_count,
+        COUNT(DISTINCT np.n_patient_cro) as report_count,
+        SUM(sh.amount) as total_amount
+      FROM nursing_patient np
+      JOIN patient_new p ON p.cro = np.n_patient_cro
+      LEFT JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
+      LEFT JOIN scan s ON FIND_IN_SET(s.s_id, p.scan_type)
+      LEFT JOIN scan_heads sh ON s.scan_head_id = sh.id
+      ${whereClause}
+      AND np.ct_scan_doctor_id IS NOT NULL
+      AND sh.amount IS NOT NULL
+      GROUP BY sh.id, sh.head_name
+      ORDER BY total_amount DESC
+    `;
+    
+    const [headSummary] = await connection.execute(headSummaryQuery, queryParams);
+    
+    // Overall summary
+    const totalDoctors = new Set(reports.map(r => r.doctor_id)).size;
+    const totalReports = reports.length;
+    const totalAmount = reports.reduce((sum, r) => sum + parseFloat(r.total_amount || 0), 0);
+    
+    res.json({
+      success: true,
+      data: reports,
+      summary: {
+        total_doctors: totalDoctors,
+        total_reports: totalReports,
+        total_amount: totalAmount,
+        by_doctor: doctorSummary,
+        by_head: headSummary
+      }
+    });
+    
+  } catch (error) {
+    console.error('Doctor scan report error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch doctor scan report',
+      details: error.message
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+
 
 module.exports = router;

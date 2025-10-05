@@ -519,6 +519,13 @@ router.get('/queue-after', async (req, res) => {
 
 // Detail report - date range filtering
 router.get('/detail-report', async (req, res) => {
+  // Add cache control headers
+  res.set({
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  });
+  
   let connection;
   try {
     const { fromDate, toDate } = req.query;
@@ -545,8 +552,8 @@ router.get('/detail-report', async (req, res) => {
       FROM patient_new 
       JOIN console ON console.c_p_cro = patient_new.cro 
       JOIN doctor ON doctor.d_id = patient_new.doctor_name
-      WHERE console.added_on BETWEEN ? AND ?
-      ORDER BY console.con_id ASC
+      WHERE DATE(patient_new.added_on) BETWEEN ? AND ?
+      ORDER BY patient_new.patient_id DESC
     `;
     
     const [reports] = await connection.execute(query, [sqlStartDate, sqlEndDate]);
@@ -605,7 +612,7 @@ router.get('/detail-report', async (req, res) => {
   }
 });
 
-// Update console record - only updates patient_new table
+// Update console record - updates both console and patient_new tables
 router.post('/update-console', async (req, res) => {
   let connection;
   try {
@@ -613,7 +620,18 @@ router.post('/update-console', async (req, res) => {
       con_id,
       scan_date,
       allot_date,
-      date
+      date,
+      added_on,
+      start_time,
+      stop_time,
+      examination_id,
+      status,
+      number_scan,
+      number_films,
+      number_contrast,
+      technician_name,
+      issue_cd,
+      remark
     } = req.body;
 
     connection = await mysql.createConnection(dbConfig);
@@ -629,48 +647,95 @@ router.post('/update-console', async (req, res) => {
     }
 
     const cro = consoleRecord[0].c_p_cro;
-    const updateFields = [];
-    const updateValues = [];
     
-    // Handle date formats based on database requirements
+    // Update patient_new table dates and examination_id
+    const patientUpdateFields = [];
+    const patientUpdateValues = [];
+    
     if (scan_date) {
-      updateFields.push('scan_date = ?');
-      updateValues.push(scan_date); // Keep YYYY-MM-DD format for scan_date
+      patientUpdateFields.push('scan_date = ?');
+      patientUpdateValues.push(scan_date);
     }
     if (allot_date) {
-      updateFields.push('allot_date = ?');
-      // Convert YYYY-MM-DD to DD-MM-YYYY for allot_date
+      patientUpdateFields.push('allot_date = ?');
       const parts = allot_date.split('-');
       const formattedAllotDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
-      updateValues.push(formattedAllotDate);
+      patientUpdateValues.push(formattedAllotDate);
     }
     if (date) {
-      updateFields.push('date = ?');
-      // Convert YYYY-MM-DD to DD-MM-YYYY for registration date
+      patientUpdateFields.push('date = ?');
       const parts = date.split('-');
       const formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
-      updateValues.push(formattedDate);
+      patientUpdateValues.push(formattedDate);
+    }
+    if (examination_id !== undefined) {
+      patientUpdateFields.push('examination_id = ?');
+      patientUpdateValues.push(examination_id);
     }
     
-    if (updateFields.length > 0) {
-      updateValues.push(cro);
-      
+    if (patientUpdateFields.length > 0) {
+      patientUpdateValues.push(cro);
       await connection.execute(`
         UPDATE patient_new 
-        SET ${updateFields.join(', ')}
+        SET ${patientUpdateFields.join(', ')}
         WHERE cro = ?
-      `, updateValues);
+      `, patientUpdateValues);
+    }
+
+    // Update console table (excluding date/time fields)
+    const consoleUpdateFields = [];
+    const consoleUpdateValues = [];
+    if (examination_id !== undefined) {
+      consoleUpdateFields.push('examination_id = ?');
+      consoleUpdateValues.push(examination_id);
+    }
+    if (status) {
+      consoleUpdateFields.push('status = ?');
+      consoleUpdateValues.push(status);
+    }
+    if (number_scan !== undefined) {
+      consoleUpdateFields.push('number_scan = ?');
+      consoleUpdateValues.push(number_scan);
+    }
+    if (number_films !== undefined) {
+      consoleUpdateFields.push('number_films = ?');
+      consoleUpdateValues.push(number_films);
+    }
+    if (number_contrast !== undefined) {
+      consoleUpdateFields.push('number_contrast = ?');
+      consoleUpdateValues.push(number_contrast);
+    }
+    if (technician_name !== undefined) {
+      consoleUpdateFields.push('technician_name = ?');
+      consoleUpdateValues.push(technician_name);
+    }
+    if (issue_cd) {
+      consoleUpdateFields.push('issue_cd = ?');
+      consoleUpdateValues.push(issue_cd);
+    }
+    if (remark !== undefined) {
+      consoleUpdateFields.push('remark = ?');
+      consoleUpdateValues.push(remark);
+    }
+    
+    if (consoleUpdateFields.length > 0) {
+      consoleUpdateValues.push(con_id);
+      await connection.execute(`
+        UPDATE console 
+        SET ${consoleUpdateFields.join(', ')}
+        WHERE con_id = ?
+      `, consoleUpdateValues);
     }
 
     res.json({
       success: true,
-      message: 'Patient dates updated successfully'
+      message: 'Console record updated successfully'
     });
 
   } catch (error) {
     console.error('Update console error:', error);
     res.status(500).json({
-      error: 'Failed to update patient dates',
+      error: 'Failed to update console record',
       details: error.message,
       stack: error.stack,
       body: req.body,

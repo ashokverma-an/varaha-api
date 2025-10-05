@@ -268,12 +268,12 @@ async function generateTableForGroup(connection, group, scanDate, selectedDate, 
     }
     
     const scanNames = [];
-    let patientTotalScans = 0;
+    let patientTotalScans = 0; // This is $tot_p_scan in PHP
     let patientAmount = 0;
     
     for (const scan of scanResults) {
       scanNames.push(scan.s_name);
-      patientTotalScans += scan.total_scan || 0;
+      patientTotalScans += scan.total_scan || 0; // Sum from scan table
       patientAmount += scan.charges || 0;
     }
     
@@ -291,7 +291,7 @@ async function generateTableForGroup(connection, group, scanDate, selectedDate, 
       age: (patient.age || '').toString().replace('ear', ''),
       gender: (patient.gender || '').substring(0, 1),
       scanNames: scanNames,
-      totalScans: patientTotalScans,
+      totalScans: patientTotalScans, // This matches PHP $tot_p_scan calculation
       amount: patientAmount,
       category: patient.category,
       mobile: patient.mobile || '',
@@ -929,6 +929,14 @@ router.get('/patient-list', async (req, res) => {
   try {
     connection = await mysql.createConnection(dbConfig);
 
+    // Get today's date in dd-mm-yyyy format
+    const now = new Date();
+    const calcuttaTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Calcutta" }));
+    const dd = String(calcuttaTime.getDate()).padStart(2, "0");
+    const mm = String(calcuttaTime.getMonth() + 1).padStart(2, "0");
+    const yyyy = calcuttaTime.getFullYear();
+    const todayDate = `${dd}-${mm}-${yyyy}`;
+
     const query = `
       SELECT 
         patient_new.patient_id,
@@ -946,11 +954,11 @@ router.get('/patient-list', async (req, res) => {
       FROM patient_new 
       LEFT JOIN doctor ON doctor.d_id = patient_new.doctor_name
       LEFT JOIN hospital ON hospital.h_id = patient_new.hospital_id
+      WHERE patient_new.date = ?
       ORDER BY patient_new.patient_id DESC
-      LIMIT 100
     `;
     
-    const [patients] = await connection.execute(query);
+    const [patients] = await connection.execute(query, [todayDate]);
     
     res.json({
       success: true,
@@ -1030,6 +1038,322 @@ router.get('/patient-edit', async (req, res) => {
     console.error('Patient edit error:', error);
     res.status(500).json({
       error: 'Failed to fetch patient data',
+      details: error.message
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Scan Heads - Get all scan heads
+router.get('/scan-heads', async (req, res) => {
+  let connection;
+  try {
+    connection = await mysql.createConnection(dbConfig);
+    const [scanHeads] = await connection.execute(
+      'SELECT id, head_name, amount, per_scan FROM scan_heads WHERE status = 1 ORDER BY head_name ASC'
+    );
+    
+    res.json({
+      success: true,
+      data: scanHeads
+    });
+  } catch (error) {
+    console.error('Scan heads fetch error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch scan heads',
+      details: error.message
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Scan Heads - Create new scan head
+router.post('/scan-heads', async (req, res) => {
+  let connection;
+  try {
+    const { head_name, amount, per_scan } = req.body;
+    
+    connection = await mysql.createConnection(dbConfig);
+    await connection.execute(
+      'INSERT INTO scan_heads (head_name, amount, per_scan) VALUES (?, ?, ?)',
+      [head_name, amount, per_scan]
+    );
+    
+    res.json({
+      success: true,
+      message: 'Scan head created successfully'
+    });
+  } catch (error) {
+    console.error('Scan head create error:', error);
+    res.status(500).json({
+      error: 'Failed to create scan head',
+      details: error.message
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Scan Heads - Update scan head
+router.put('/scan-heads/:id', async (req, res) => {
+  let connection;
+  try {
+    const { id } = req.params;
+    const { head_name, amount, per_scan } = req.body;
+    
+    connection = await mysql.createConnection(dbConfig);
+    await connection.execute(
+      'UPDATE scan_heads SET head_name = ?, amount = ?, per_scan = ? WHERE id = ?',
+      [head_name, amount, per_scan, id]
+    );
+    
+    res.json({
+      success: true,
+      message: 'Scan head updated successfully'
+    });
+  } catch (error) {
+    console.error('Scan head update error:', error);
+    res.status(500).json({
+      error: 'Failed to update scan head',
+      details: error.message
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Scan Heads - Delete scan head (soft delete)
+router.delete('/scan-heads/:id', async (req, res) => {
+  let connection;
+  try {
+    const { id } = req.params;
+    
+    connection = await mysql.createConnection(dbConfig);
+    await connection.execute(
+      'UPDATE scan_heads SET status = 0 WHERE id = ?',
+      [id]
+    );
+    
+    res.json({
+      success: true,
+      message: 'Scan head deleted successfully'
+    });
+  } catch (error) {
+    console.error('Scan head delete error:', error);
+    res.status(500).json({
+      error: 'Failed to delete scan head',
+      details: error.message
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Doctor Scan Report - Get comprehensive doctor scan reports
+router.get('/doctor-scan-report', async (req, res) => {
+  let connection;
+  try {
+    const { doctor_id, scan_head_id, from_date, to_date } = req.query;
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    // Build WHERE clause
+    let whereClause = 'WHERE np.n_patient_ct = "yes" AND np.n_patient_x_ray = "yes"';
+    const queryParams = [];
+    
+    if (doctor_id) {
+      whereClause += ' AND np.ct_scan_doctor_id = ?';
+      queryParams.push(doctor_id);
+    }
+    
+    if (from_date && to_date) {
+      whereClause += ' AND DATE(np.ct_scan_report_date) BETWEEN ? AND ?';
+      queryParams.push(from_date, to_date);
+    } else if (from_date) {
+      whereClause += ' AND DATE(np.ct_scan_report_date) >= ?';
+      queryParams.push(from_date);
+    } else if (to_date) {
+      whereClause += ' AND DATE(np.ct_scan_report_date) <= ?';
+      queryParams.push(to_date);
+    }
+    
+    // Main query to get detailed reports
+    const detailQuery = `
+      SELECT 
+        np.ct_scan_doctor_id as doctor_id,
+        csd.doctor_name,
+        p.cro as patient_cro,
+        p.patient_name,
+        p.scan_type as scan_types,
+        p.category,
+        np.ct_scan_report_date as report_date,
+        GROUP_CONCAT(DISTINCT s.s_name SEPARATOR ', ') as scan_names,
+        GROUP_CONCAT(DISTINCT sh.head_name SEPARATOR ', ') as scan_head_names,
+        SUM(DISTINCT sh.amount) as total_amount
+      FROM nursing_patient np
+      JOIN patient_new p ON p.cro = np.n_patient_cro
+      LEFT JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
+      LEFT JOIN scan s ON FIND_IN_SET(s.s_id, p.scan_type)
+      LEFT JOIN scan_heads sh ON s.scan_head_id = sh.id
+      ${whereClause}
+      GROUP BY np.n_patient_cro, np.ct_scan_doctor_id
+      ORDER BY np.ct_scan_report_date DESC
+    `;
+    
+    const [reports] = await connection.execute(detailQuery, queryParams);
+    
+    // Summary by doctor
+    const doctorSummaryQuery = `
+      SELECT 
+        csd.doctor_name,
+        COUNT(*) as report_count,
+        SUM(sh.amount) as total_amount
+      FROM nursing_patient np
+      JOIN patient_new p ON p.cro = np.n_patient_cro
+      LEFT JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
+      LEFT JOIN scan s ON FIND_IN_SET(s.s_id, p.scan_type)
+      LEFT JOIN scan_heads sh ON s.scan_head_id = sh.id
+      ${whereClause}
+      GROUP BY np.ct_scan_doctor_id, csd.doctor_name
+      ORDER BY total_amount DESC
+    `;
+    
+    const [doctorSummary] = await connection.execute(doctorSummaryQuery, queryParams);
+    
+    // Summary by scan head
+    const headSummaryQuery = `
+      SELECT 
+        sh.head_name,
+        COUNT(DISTINCT np.ct_scan_doctor_id) as doctor_count,
+        COUNT(*) as report_count,
+        SUM(sh.amount) as total_amount
+      FROM nursing_patient np
+      JOIN patient_new p ON p.cro = np.n_patient_cro
+      LEFT JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
+      LEFT JOIN scan s ON FIND_IN_SET(s.s_id, p.scan_type)
+      LEFT JOIN scan_heads sh ON s.scan_head_id = sh.id
+      ${whereClause}
+      AND sh.id IS NOT NULL
+      GROUP BY sh.id, sh.head_name
+      ORDER BY total_amount DESC
+    `;
+    
+    const [headSummary] = await connection.execute(headSummaryQuery, queryParams);
+    
+    // Overall summary
+    const totalDoctors = new Set(reports.map(r => r.doctor_id)).size;
+    const totalReports = reports.length;
+    const totalAmount = reports.reduce((sum, r) => sum + (r.total_amount || 0), 0);
+    
+    res.json({
+      success: true,
+      data: reports,
+      summary: {
+        total_doctors: totalDoctors,
+        total_reports: totalReports,
+        total_amount: totalAmount,
+        by_doctor: doctorSummary,
+        by_head: headSummary
+      }
+    });
+    
+  } catch (error) {
+    console.error('Doctor scan report error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch doctor scan report',
+      details: error.message
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Doctor Scan Report Download
+router.get('/doctor-scan-report/download', async (req, res) => {
+  let connection;
+  try {
+    const { format = 'excel', doctor_id, scan_head_id, from_date, to_date } = req.query;
+    
+    connection = await mysql.createConnection(dbConfig);
+    
+    // Get doctors for filter display
+    const [doctors] = await connection.execute('SELECT id, doctor_name FROM ct_scan_doctor');
+    
+    // Same query logic as above
+    let whereClause = 'WHERE np.n_patient_ct = "yes" AND np.n_patient_x_ray = "yes"';
+    const queryParams = [];
+    
+    if (doctor_id) {
+      whereClause += ' AND np.ct_scan_doctor_id = ?';
+      queryParams.push(doctor_id);
+    }
+    
+    if (from_date && to_date) {
+      whereClause += ' AND DATE(np.ct_scan_report_date) BETWEEN ? AND ?';
+      queryParams.push(from_date, to_date);
+    }
+    
+    const detailQuery = `
+      SELECT 
+        csd.doctor_name,
+        p.patient_name,
+        p.cro,
+        GROUP_CONCAT(DISTINCT s.s_name SEPARATOR ', ') as scan_names,
+        GROUP_CONCAT(DISTINCT sh.head_name SEPARATOR ', ') as scan_head_names,
+        SUM(DISTINCT sh.amount) as total_amount,
+        np.ct_scan_report_date,
+        p.category
+      FROM nursing_patient np
+      JOIN patient_new p ON p.cro = np.n_patient_cro
+      LEFT JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
+      LEFT JOIN scan s ON FIND_IN_SET(s.s_id, p.scan_type)
+      LEFT JOIN scan_heads sh ON s.scan_head_id = sh.id
+      ${whereClause}
+      GROUP BY np.n_patient_cro, np.ct_scan_doctor_id
+      ORDER BY np.ct_scan_report_date DESC
+    `;
+    
+    const [reports] = await connection.execute(detailQuery, queryParams);
+    
+    if (format === 'excel') {
+      // Create Excel format with header rows
+      const dateRange = from_date && to_date ? `${from_date} to ${to_date}` : 'All Dates';
+      const doctorFilter = doctor_id ? doctors.find(d => d.id == doctor_id)?.doctor_name || 'Unknown' : 'All Doctors';
+      const categoryFilter = category && category !== 'All' ? category : 'All Categories';
+      
+      const csvContent = [
+        '"VARAHA SDC : 256 SLICE CT SCAN"',
+        '"DOCTOR SCAN REPORT"',
+        `"Date Range: ${dateRange}"`,
+        `"Doctor Filter: ${doctorFilter}"`,
+        '',
+        '"S.No","Doctor Name","Patient Name","CRO","Scan Types","Scan Heads","Amount","Report Date"',
+        ...reports.map((row, index) => [
+          `"${index + 1}"`,
+          `"${row.doctor_name || ''}"`,
+          `"${row.patient_name || ''}"`,
+          `"${row.cro || ''}"`,
+          `"${row.scan_names || ''}"`,
+          `"${row.scan_head_names || ''}"`,
+          `"${row.total_amount || 0}"`,
+          `"${row.ct_scan_report_date || ''}"`
+        ].join(','))
+      ].join('\n');
+      
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="doctor-scan-report.csv"');
+      res.send(csvContent);
+    } else {
+      // Return JSON for PDF processing
+      res.json({ data: reports });
+    }
+    
+  } catch (error) {
+    console.error('Doctor scan report download error:', error);
+    res.status(500).json({
+      error: 'Failed to download doctor scan report',
       details: error.message
     });
   } finally {
@@ -1297,6 +1621,88 @@ router.get('/scans', async (req, res) => {
   } catch (error) {
     console.error('Admin scans error:', error);
     res.status(500).json({ error: 'Failed to fetch scans', details: error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Scans - Create new scan
+router.post('/scans', async (req, res) => {
+  let connection;
+  try {
+    const { s_name, n_o_films, contrass, total_scan, estimate_time, charges, scan_head_id } = req.body;
+    
+    connection = await mysql.createConnection(dbConfig);
+    await connection.execute(
+      'INSERT INTO scan (s_name, n_o_films, contrass, total_scan, estimate_time, charges, scan_head_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [s_name, n_o_films || 0, contrass || 0, total_scan || 1, estimate_time || '', charges || 0, scan_head_id || null]
+    );
+    
+    res.json({
+      success: true,
+      message: 'Scan created successfully'
+    });
+  } catch (error) {
+    console.error('Scan create error:', error);
+    res.status(500).json({
+      error: 'Failed to create scan',
+      details: error.message
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Scans - Update scan
+router.put('/scans/:id', async (req, res) => {
+  let connection;
+  try {
+    const { id } = req.params;
+    const { s_name, n_o_films, contrass, total_scan, estimate_time, charges, scan_head_id } = req.body;
+    
+    connection = await mysql.createConnection(dbConfig);
+    await connection.execute(
+      'UPDATE scan SET s_name = ?, n_o_films = ?, contrass = ?, total_scan = ?, estimate_time = ?, charges = ?, scan_head_id = ? WHERE s_id = ?',
+      [s_name, n_o_films || 0, contrass || 0, total_scan || 1, estimate_time || '', charges || 0, scan_head_id || null, id]
+    );
+    
+    res.json({
+      success: true,
+      message: 'Scan updated successfully'
+    });
+  } catch (error) {
+    console.error('Scan update error:', error);
+    res.status(500).json({
+      error: 'Failed to update scan',
+      details: error.message
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Scans - Delete scan
+router.delete('/scans/:id', async (req, res) => {
+  let connection;
+  try {
+    const { id } = req.params;
+    
+    connection = await mysql.createConnection(dbConfig);
+    await connection.execute(
+      'DELETE FROM scan WHERE s_id = ?',
+      [id]
+    );
+    
+    res.json({
+      success: true,
+      message: 'Scan deleted successfully'
+    });
+  } catch (error) {
+    console.error('Scan delete error:', error);
+    res.status(500).json({
+      error: 'Failed to delete scan',
+      details: error.message
+    });
   } finally {
     if (connection) await connection.end();
   }

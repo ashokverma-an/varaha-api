@@ -679,15 +679,18 @@ router.get('/nursing/:cro', async (req, res) => {
     
     const patient = patients[0];
     
-    // Get scan details
+    // Get scan details with scan head information
     const scanIds = patient.scan_type ? patient.scan_type.split(',') : [];
     const scans = [];
     
     for (const scanId of scanIds) {
       if (scanId.trim()) {
-        const [scanResult] = await connection.execute(
-          'SELECT * FROM scan WHERE s_id = ?', [scanId.trim()]
-        );
+        const [scanResult] = await connection.execute(`
+          SELECT s.*, sh.head_name 
+          FROM scan s 
+          LEFT JOIN scan_heads sh ON s.scan_head_id = sh.id 
+          WHERE s.s_id = ?
+        `, [scanId.trim()]);
         if (scanResult.length > 0) {
           scans.push(scanResult[0]);
         }
@@ -754,7 +757,8 @@ router.post('/save-nursing', async (req, res) => {
   try {
     const { 
       cro, 
-      ct_scan_doctor_id, 
+      ct_scan_doctor_id,
+      ct_scan_report_date, 
       n_patient_ct, 
       n_patient_ct_report_date, 
       n_patient_ct_remark,
@@ -774,11 +778,12 @@ router.post('/save-nursing', async (req, res) => {
       // Update existing record
       await connection.execute(`
         UPDATE nursing_patient 
-        SET ct_scan_doctor_id = ?, n_patient_ct = ?, n_patient_ct_report_date = ?, n_patient_ct_remark = ?,
+        SET ct_scan_doctor_id = ?, ct_scan_report_date = ?, n_patient_ct = ?, n_patient_ct_report_date = ?, n_patient_ct_remark = ?,
             n_patient_x_ray = ?, n_patient_x_ray_report_date = ?, n_patient_x_ray_remark = ?
         WHERE n_patient_cro = ?
       `, [
-        ct_scan_doctor_id || null, 
+        ct_scan_doctor_id || null,
+        ct_scan_report_date || null, 
         n_patient_ct, 
         n_patient_ct_report_date || null, 
         n_patient_ct_remark,
@@ -791,13 +796,14 @@ router.post('/save-nursing', async (req, res) => {
       // Insert new record
       await connection.execute(`
         INSERT INTO nursing_patient (
-          n_patient_cro, ct_scan_doctor_id, n_patient_ct, n_patient_ct_report_date, n_patient_ct_remark,
+          n_patient_cro, ct_scan_doctor_id, ct_scan_report_date, n_patient_ct, n_patient_ct_report_date, n_patient_ct_remark,
           n_patient_x_ray, n_patient_x_ray_report_date, n_patient_x_ray_remark
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         cro, 
-        ct_scan_doctor_id || null, 
+        ct_scan_doctor_id || null,
+        ct_scan_report_date || null, 
         n_patient_ct, 
         n_patient_ct_report_date || null, 
         n_patient_ct_remark,

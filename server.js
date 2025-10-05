@@ -124,6 +124,7 @@ const doctorRoutes = require('./routes/doctor');
 const consoleRoutes = require('./routes/console');
 const accountsRoutes = require('./routes/accounts');
 const receptionRoutes = require('./routes/reception');
+const inventoryRoutes = require('./routes/inventory');
 
 // Use routes
 app.use('/auth', authRoutes);
@@ -136,6 +137,7 @@ app.use('/doctor', doctorRoutes);
 app.use('/console', consoleRoutes);
 app.use('/accounts', accountsRoutes);
 app.use('/reception', receptionRoutes);
+app.use('/inventory', inventoryRoutes);
 
 // Add /api prefix routes for cPanel
 app.use('/api/auth', authRoutes);
@@ -148,6 +150,7 @@ app.use('/api/doctor', doctorRoutes);
 app.use('/api/console', consoleRoutes);
 app.use('/api/accounts', accountsRoutes);
 app.use('/api/reception', receptionRoutes);
+app.use('/api/inventory', inventoryRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
