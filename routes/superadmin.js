@@ -702,13 +702,13 @@ router.get('/doctor-scan-report', async (req, res) => {
     }
     
     if (from_date && to_date) {
-      whereClause += ' AND DATE(FROM_UNIXTIME(np.added_on)) BETWEEN ? AND ?';
+      whereClause += ' AND DATE(FROM_UNIXTIME(np.added_on)) BETWEEN STR_TO_DATE(?, "%d-%m-%Y") AND STR_TO_DATE(?, "%d-%m-%Y")';
       queryParams.push(from_date, to_date);
     } else if (from_date) {
-      whereClause += ' AND DATE(FROM_UNIXTIME(np.added_on)) >= ?';
+      whereClause += ' AND DATE(FROM_UNIXTIME(np.added_on)) >= STR_TO_DATE(?, "%d-%m-%Y")';
       queryParams.push(from_date);
     } else if (to_date) {
-      whereClause += ' AND DATE(FROM_UNIXTIME(np.added_on)) <= ?';
+      whereClause += ' AND DATE(FROM_UNIXTIME(np.added_on)) <= STR_TO_DATE(?, "%d-%m-%Y")';
       queryParams.push(to_date);
     }
     
@@ -727,7 +727,7 @@ router.get('/doctor-scan-report', async (req, res) => {
         SUM(sh.amount) as total_amount
       FROM nursing_patient np
       JOIN patient_new p ON p.cro = np.n_patient_cro
-      LEFT JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
+      INNER JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
       LEFT JOIN scan s ON FIND_IN_SET(s.s_id, p.scan_type)
       LEFT JOIN scan_heads sh ON s.scan_head_id = sh.id
       ${whereClause}
@@ -747,7 +747,7 @@ router.get('/doctor-scan-report', async (req, res) => {
         SUM(sh.amount) as total_amount
       FROM nursing_patient np
       JOIN patient_new p ON p.cro = np.n_patient_cro
-      LEFT JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
+      INNER JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
       LEFT JOIN scan s ON FIND_IN_SET(s.s_id, p.scan_type)
       LEFT JOIN scan_heads sh ON s.scan_head_id = sh.id
       ${whereClause}
@@ -768,7 +768,7 @@ router.get('/doctor-scan-report', async (req, res) => {
         SUM(sh.amount) as total_amount
       FROM nursing_patient np
       JOIN patient_new p ON p.cro = np.n_patient_cro
-      LEFT JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
+      INNER JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
       LEFT JOIN scan s ON FIND_IN_SET(s.s_id, p.scan_type)
       LEFT JOIN scan_heads sh ON s.scan_head_id = sh.id
       ${whereClause}

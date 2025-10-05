@@ -291,8 +291,8 @@ async function generateTableForGroup(connection, group, scanDate, selectedDate, 
       age: (patient.age || '').toString().replace('ear', ''),
       gender: (patient.gender || '').substring(0, 1),
       scanNames: scanNames,
-      totalScans: patientTotalScans, // This matches PHP $tot_p_scan calculation
-      amount: patientAmount,
+      totalScans: patientTotalScans,
+      amount: parseFloat(patientAmount.toFixed(2)),
       category: patient.category,
       mobile: patient.mobile || '',
       doctor: patient.doctor || ''
@@ -310,7 +310,7 @@ async function generateTableForGroup(connection, group, scanDate, selectedDate, 
     patients: processedPatients,
     totals: {
       totalScans,
-      totalAmount
+      totalAmount: parseFloat(totalAmount.toFixed(2))
     }
   };
 }
@@ -545,8 +545,8 @@ async function generateSummaryForGroup(connection, group, scanDate, selectedDate
       scanCode: sumRow.scan_type.replace(/,/g, ' + '),
       numberOfScans: numberOfScans,
       patientCount: sumRow.cnt,
-      rate: rate,
-      amount: rowAmount
+      rate: parseFloat(rate.toFixed(2)),
+      amount: parseFloat(rowAmount.toFixed(2))
     });
     
     totalPatients += sumRow.cnt;
@@ -562,7 +562,7 @@ async function generateSummaryForGroup(connection, group, scanDate, selectedDate
     totals: {
       totalPatients,
       totalScans,
-      totalAmount
+      totalAmount: parseFloat(totalAmount.toFixed(2))
     }
   };
 }
@@ -1793,6 +1793,45 @@ router.get('/patients/last-enrolled', async (req, res) => {
   } catch (error) {
     console.error('Last enrolled patient error:', error);
     res.status(500).json({ error: 'Failed to fetch last enrolled patient', details: error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Paid patients details - matches PHP dail_revenue_summary_xls.php logic
+router.get('/paid-patients', async (req, res) => {
+  let connection;
+  try {
+    const { s_date } = req.query;
+    
+    if (!s_date) {
+      return res.status(400).json({ error: 'Date parameter (s_date) is required' });
+    }
+
+    const parts = s_date.split('-');
+    const sd = `${parts[2]}-${parts[1]}-${parts[0]}`;
+
+    connection = await mysql.createConnection(dbConfig);
+
+    const [paidData] = await connection.execute(`
+      SELECT COUNT(*) as tot_patient, SUM(total_scan) as tot_scan, SUM(amount) as tot_amt 
+      FROM patient_new 
+      WHERE scan_date = ? AND scan_status = 1 AND category IN ('GEN / Paid')
+    `, [sd]);
+    
+    const result = paidData[0] || { tot_patient: 0, tot_scan: 0, tot_amt: 0 };
+    
+    res.json({
+      success: true,
+      tot_patient: parseInt(result.tot_patient) || 0,
+      tot_scan: parseInt(result.tot_scan) || 0,
+      tot_amt: parseFloat((result.tot_amt || 0).toFixed(2)),
+      date: s_date
+    });
+
+  } catch (error) {
+    console.error('Paid patients error:', error);
+    res.status(500).json({ error: 'Failed to fetch paid patients data', details: error.message });
   } finally {
     if (connection) await connection.end();
   }
