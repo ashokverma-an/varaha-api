@@ -702,15 +702,25 @@ router.get('/doctor-scan-report', async (req, res) => {
     }
     
     if (from_date && to_date) {
-      whereClause += ' AND DATE(FROM_UNIXTIME(np.added_on)) BETWEEN STR_TO_DATE(?, "%d-%m-%Y") AND STR_TO_DATE(?, "%d-%m-%Y")';
-      queryParams.push(from_date, to_date);
+      // Convert DD-MM-YYYY to YYYY-MM-DD
+      const fromParts = from_date.split('-');
+      const toParts = to_date.split('-');
+      const fromFormatted = `${fromParts[2]}-${fromParts[1]}-${fromParts[0]}`;
+      const toFormatted = `${toParts[2]}-${toParts[1]}-${toParts[0]}`;
+      whereClause += ' AND DATE(np.ct_scan_report_date) BETWEEN ? AND ?';
+      queryParams.push(fromFormatted, toFormatted);
     } else if (from_date) {
-      whereClause += ' AND DATE(FROM_UNIXTIME(np.added_on)) >= STR_TO_DATE(?, "%d-%m-%Y")';
-      queryParams.push(from_date);
+      const fromParts = from_date.split('-');
+      const fromFormatted = `${fromParts[2]}-${fromParts[1]}-${fromParts[0]}`;
+      whereClause += ' AND DATE(np.ct_scan_report_date) >= ?';
+      queryParams.push(fromFormatted);
     } else if (to_date) {
-      whereClause += ' AND DATE(FROM_UNIXTIME(np.added_on)) <= STR_TO_DATE(?, "%d-%m-%Y")';
-      queryParams.push(to_date);
+      const toParts = to_date.split('-');
+      const toFormatted = `${toParts[2]}-${toParts[1]}-${toParts[0]}`;
+      whereClause += ' AND DATE(np.ct_scan_report_date) <= ?';
+      queryParams.push(toFormatted);
     }
+    
     
     // Main query to get detailed reports
     const detailQuery = `
@@ -721,7 +731,7 @@ router.get('/doctor-scan-report', async (req, res) => {
         p.patient_name,
         p.scan_type as scan_types,
         p.category,
-        DATE_FORMAT(FROM_UNIXTIME(np.added_on), '%d-%m-%Y') as report_date,
+        DATE_FORMAT(np.ct_scan_report_date, '%d-%m-%Y') as report_date,
         GROUP_CONCAT(DISTINCT s.s_name SEPARATOR ', ') as scan_names,
         GROUP_CONCAT(DISTINCT sh.head_name SEPARATOR ', ') as scan_head_names,
         SUM(sh.amount) as total_amount
