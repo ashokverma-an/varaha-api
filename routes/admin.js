@@ -929,13 +929,32 @@ router.get('/patient-list', async (req, res) => {
   try {
     connection = await mysql.createConnection(dbConfig);
 
-    // Get today's date in dd-mm-yyyy format
-    const now = new Date();
-    const calcuttaTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Calcutta" }));
-    const dd = String(calcuttaTime.getDate()).padStart(2, "0");
-    const mm = String(calcuttaTime.getMonth() + 1).padStart(2, "0");
-    const yyyy = calcuttaTime.getFullYear();
-    const todayDate = `${dd}-${mm}-${yyyy}`;
+    const { from_date, to_date } = req.query;
+    
+    let whereClause = '';
+    let queryParams = [];
+    
+    if (from_date && to_date) {
+      // Convert yyyy-mm-dd to dd-mm-yyyy format for database comparison
+      const fromParts = from_date.split('-');
+      const toParts = to_date.split('-');
+      const fromDateFormatted = `${fromParts[2]}-${fromParts[1]}-${fromParts[0]}`;
+      const toDateFormatted = `${toParts[2]}-${toParts[1]}-${toParts[0]}`;
+      
+      whereClause = 'WHERE STR_TO_DATE(patient_new.date, "%d-%m-%Y") BETWEEN STR_TO_DATE(?, "%d-%m-%Y") AND STR_TO_DATE(?, "%d-%m-%Y")';
+      queryParams = [fromDateFormatted, toDateFormatted];
+    } else {
+      // Default to today's date
+      const now = new Date();
+      const calcuttaTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Calcutta" }));
+      const dd = String(calcuttaTime.getDate()).padStart(2, "0");
+      const mm = String(calcuttaTime.getMonth() + 1).padStart(2, "0");
+      const yyyy = calcuttaTime.getFullYear();
+      const todayDate = `${dd}-${mm}-${yyyy}`;
+      
+      whereClause = 'WHERE patient_new.date = ?';
+      queryParams = [todayDate];
+    }
 
     const query = `
       SELECT 
@@ -954,11 +973,11 @@ router.get('/patient-list', async (req, res) => {
       FROM patient_new 
       LEFT JOIN doctor ON doctor.d_id = patient_new.doctor_name
       LEFT JOIN hospital ON hospital.h_id = patient_new.hospital_id
-      WHERE patient_new.date = ?
+      ${whereClause}
       ORDER BY patient_new.patient_id DESC
     `;
     
-    const [patients] = await connection.execute(query, [todayDate]);
+    const [patients] = await connection.execute(query, queryParams);
     
     res.json({
       success: true,
