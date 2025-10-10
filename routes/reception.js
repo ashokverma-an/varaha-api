@@ -362,25 +362,47 @@ router.get('/patients/list', async (req, res) => {
   try {
     connection = await mysql.createConnection(dbConfig);
     
-    // Get today's date in dd-mm-yyyy format
-    const now = new Date();
-    const calcuttaTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Calcutta" }));
-    const dd = String(calcuttaTime.getDate()).padStart(2, "0");
-    const mm = String(calcuttaTime.getMonth() + 1).padStart(2, "0");
-    const yyyy = calcuttaTime.getFullYear();
-    const date = `${dd}-${mm}-${yyyy}`;
+    const { from, to } = req.query;
     
-    // Same query as PHP: patients with scan_status != 1 and today's date
-    const query = `
-      SELECT p.*, h.h_name, d.dname 
-      FROM patient_new p
-      LEFT JOIN hospital h ON h.h_id = p.hospital_id
-      LEFT JOIN doctor d ON d.d_id = p.doctor_name
-      WHERE p.scan_status != 1 AND p.date = ?
-      ORDER BY p.patient_id DESC
-    `;
+    let query, params;
     
-    const [patients] = await connection.execute(query, [date]);
+    if (from && to) {
+      // Convert yyyy-mm-dd to dd-mm-yyyy format for database
+      const fromParts = from.split('-');
+      const toParts = to.split('-');
+      const fromDate = `${fromParts[2]}-${fromParts[1]}-${fromParts[0]}`;
+      const toDate = `${toParts[2]}-${toParts[1]}-${toParts[0]}`;
+      
+      query = `
+        SELECT p.*, h.h_name, d.dname 
+        FROM patient_new p
+        LEFT JOIN hospital h ON h.h_id = p.hospital_id
+        LEFT JOIN doctor d ON d.d_id = p.doctor_name
+        WHERE p.scan_status != 1 AND STR_TO_DATE(p.date, '%d-%m-%Y') BETWEEN STR_TO_DATE(?, '%d-%m-%Y') AND STR_TO_DATE(?, '%d-%m-%Y')
+        ORDER BY p.patient_id DESC
+      `;
+      params = [fromDate, toDate];
+    } else {
+      // Default to today's date
+      const now = new Date();
+      const calcuttaTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Calcutta" }));
+      const dd = String(calcuttaTime.getDate()).padStart(2, "0");
+      const mm = String(calcuttaTime.getMonth() + 1).padStart(2, "0");
+      const yyyy = calcuttaTime.getFullYear();
+      const date = `${dd}-${mm}-${yyyy}`;
+      
+      query = `
+        SELECT p.*, h.h_name, d.dname 
+        FROM patient_new p
+        LEFT JOIN hospital h ON h.h_id = p.hospital_id
+        LEFT JOIN doctor d ON d.d_id = p.doctor_name
+        WHERE p.scan_status != 1 AND p.date = ?
+        ORDER BY p.patient_id DESC
+      `;
+      params = [date];
+    }
+    
+    const [patients] = await connection.execute(query, params);
     
     // Format the response to match frontend expectations
     const formattedPatients = patients.map(patient => ({
@@ -408,7 +430,8 @@ router.get('/patients/list', async (req, res) => {
     res.json({
       success: true,
       data: formattedPatients,
-      total: formattedPatients.length
+      total: formattedPatients.length,
+      dateRange: from && to ? { from, to } : 'today'
     });
     
   } catch (error) {

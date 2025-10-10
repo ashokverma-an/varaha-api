@@ -688,7 +688,7 @@ router.get('/doctor-scan-report', async (req, res) => {
     connection = await mysql.createConnection(dbConfig);
     
     // Build WHERE clause
-    let whereClause = 'WHERE np.n_patient_ct = "yes" AND np.n_patient_x_ray = "yes"';
+    let whereClause = 'WHERE np.n_patient_ct = "yes"';
     const queryParams = [];
     
     if (doctor_id) {
@@ -736,13 +736,14 @@ router.get('/doctor-scan-report', async (req, res) => {
         GROUP_CONCAT(DISTINCT sh.head_name SEPARATOR ', ') as scan_head_names,
         SUM(sh.amount) as total_amount
       FROM nursing_patient np
-      JOIN patient_new p ON p.cro = np.n_patient_cro
+      INNER JOIN patient_new p ON p.cro = np.n_patient_cro
       INNER JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
-      LEFT JOIN scan s ON FIND_IN_SET(s.s_id, p.scan_type)
-      LEFT JOIN scan_heads sh ON s.scan_head_id = sh.id
+      INNER JOIN scan s ON FIND_IN_SET(s.s_id, p.scan_type)
+      INNER JOIN scan_heads sh ON s.scan_head_id = sh.id
       ${whereClause}
       AND np.ct_scan_doctor_id IS NOT NULL
       AND sh.amount IS NOT NULL
+      AND ct_scan_report_date IS NOT NULL and ct_scan_report_date != '0000-00-00'
       GROUP BY np.n_patient_cro, np.ct_scan_doctor_id
       ORDER BY np.added_on DESC
     `;
@@ -756,13 +757,14 @@ router.get('/doctor-scan-report', async (req, res) => {
         COUNT(DISTINCT np.n_patient_cro) as report_count,
         SUM(sh.amount) as total_amount
       FROM nursing_patient np
-      JOIN patient_new p ON p.cro = np.n_patient_cro
+      INNER JOIN patient_new p ON p.cro = np.n_patient_cro
       INNER JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
-      LEFT JOIN scan s ON FIND_IN_SET(s.s_id, p.scan_type)
-      LEFT JOIN scan_heads sh ON s.scan_head_id = sh.id
+      INNER JOIN scan s ON FIND_IN_SET(s.s_id, p.scan_type)
+      INNER JOIN scan_heads sh ON s.scan_head_id = sh.id
       ${whereClause}
       AND np.ct_scan_doctor_id IS NOT NULL
       AND sh.amount IS NOT NULL
+      AND ct_scan_report_date IS NOT NULL and ct_scan_report_date != '0000-00-00'
       GROUP BY np.ct_scan_doctor_id, csd.doctor_name
       ORDER BY total_amount DESC
     `;
@@ -777,15 +779,17 @@ router.get('/doctor-scan-report', async (req, res) => {
         COUNT(DISTINCT np.n_patient_cro) as report_count,
         SUM(sh.amount) as total_amount
       FROM nursing_patient np
-      JOIN patient_new p ON p.cro = np.n_patient_cro
+      INNER JOIN patient_new p ON p.cro = np.n_patient_cro
       INNER JOIN ct_scan_doctor csd ON np.ct_scan_doctor_id = csd.id
-      LEFT JOIN scan s ON FIND_IN_SET(s.s_id, p.scan_type)
-      LEFT JOIN scan_heads sh ON s.scan_head_id = sh.id
+      INNER JOIN scan s ON FIND_IN_SET(s.s_id, p.scan_type)
+      INNER JOIN scan_heads sh ON s.scan_head_id = sh.id
       ${whereClause}
       AND np.ct_scan_doctor_id IS NOT NULL
+      AND ct_scan_report_date IS NOT NULL and ct_scan_report_date != '0000-00-00'
       AND sh.amount IS NOT NULL
       GROUP BY sh.id, sh.head_name
       ORDER BY total_amount DESC
+      
     `;
     
     const [headSummary] = await connection.execute(headSummaryQuery, queryParams);

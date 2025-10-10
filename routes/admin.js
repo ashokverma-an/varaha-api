@@ -1798,6 +1798,138 @@ router.get('/patients/last-enrolled', async (req, res) => {
   }
 });
 
+// Patient search endpoint
+router.get('/patients/search', async (req, res) => {
+  let connection;
+  try {
+    const { q } = req.query;
+    
+    if (!q) {
+      return res.status(400).json({ error: 'Search query required' });
+    }
+
+    connection = await mysql.createConnection(dbConfig);
+    
+    // Calculate 3 months ago date
+    const today = new Date();
+    const threeMonthsAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
+    const threeMonthsAgoStr = `${String(threeMonthsAgo.getDate()).padStart(2, '0')}-${String(threeMonthsAgo.getMonth() + 1).padStart(2, '0')}-${threeMonthsAgo.getFullYear()}`;
+    
+    const query = `
+      SELECT patient_new.*, doctor.dname, hospital.h_short 
+      FROM patient_new 
+      LEFT JOIN doctor ON doctor.d_id = patient_new.doctor_name
+      LEFT JOIN hospital ON hospital.h_id = patient_new.hospital_id
+      WHERE patient_new.cro = ? AND STR_TO_DATE(patient_new.date, '%d-%m-%Y') >= STR_TO_DATE(?, '%d-%m-%Y')
+    `;
+    
+    const [patients] = await connection.execute(query, [q, threeMonthsAgoStr]);
+    
+    if (patients.length === 0) {
+      return res.json({ success: false, message: 'Patient not found in last 3 months' });
+    }
+    
+    const patient = patients[0];
+    
+    res.json({
+      success: true,
+      patient: {
+        ...patient,
+        doctor_name: patient.dname || '',
+        hospital_short: patient.h_short || ''
+      }
+    });
+    
+  } catch (error) {
+    console.error('Patient search error:', error);
+    res.status(500).json({ error: 'Failed to search patient', details: error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Patient search POST endpoint
+router.post('/patients/search', async (req, res) => {
+  let connection;
+  try {
+    const { q } = req.body;
+    
+    if (!q) {
+      return res.status(400).json({ error: 'Search query required' });
+    }
+
+    connection = await mysql.createConnection(dbConfig);
+    
+    // Calculate 3 months ago date
+    const today = new Date();
+    const threeMonthsAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
+    const threeMonthsAgoStr = `${String(threeMonthsAgo.getDate()).padStart(2, '0')}-${String(threeMonthsAgo.getMonth() + 1).padStart(2, '0')}-${threeMonthsAgo.getFullYear()}`;
+    
+    const query = `
+      SELECT patient_new.*, doctor.dname, hospital.h_short 
+      FROM patient_new 
+      LEFT JOIN doctor ON doctor.d_id = patient_new.doctor_name
+      LEFT JOIN hospital ON hospital.h_id = patient_new.hospital_id
+      WHERE patient_new.cro = ? AND STR_TO_DATE(patient_new.date, '%d-%m-%Y') >= STR_TO_DATE(?, '%d-%m-%Y')
+    `;
+    
+    const [patients] = await connection.execute(query, [q, threeMonthsAgoStr]);
+    
+    if (patients.length === 0) {
+      return res.json({ success: false, message: 'Patient not found in last 3 months' });
+    }
+    
+    const patient = patients[0];
+    
+    // Get scan details
+    let scanNames = '';
+    let totalAmount = 0;
+    if (patient.scan_type) {
+      const scanIds = patient.scan_type.split(',').filter(id => id.trim());
+      for (const scanId of scanIds) {
+        const [scanResult] = await connection.execute(
+          'SELECT s_name, charges FROM scan WHERE s_id = ?',
+          [scanId.trim()]
+        );
+        if (scanResult.length > 0) {
+          scanNames += scanResult[0].s_name + ',';
+          totalAmount += scanResult[0].charges || 0;
+        }
+      }
+    }
+    
+    // Get time slot
+    let timeSlot = '';
+    if (patient.allot_time) {
+      const [timeResult] = await connection.execute(
+        'SELECT time_slot FROM time_slot WHERE time_id = ?',
+        [patient.allot_time]
+      );
+      if (timeResult.length > 0) {
+        timeSlot = timeResult[0].time_slot;
+      }
+    }
+    
+    res.json({
+      success: true,
+      patient: {
+        ...patient,
+        doctor_name: patient.dname || '',
+        hospital_short: patient.h_short || '',
+        scan_names: scanNames.replace(/,$/, ''),
+        total_scan_amount: totalAmount,
+        time_slot: timeSlot
+      }
+    });
+    
+  } catch (error) {
+    console.error('Patient search POST error:', error);
+    res.status(500).json({ error: 'Failed to search patient', details: error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
 // Paid patients details - matches PHP dail_revenue_summary_xls.php logic
 router.get('/paid-patients', async (req, res) => {
   let connection;

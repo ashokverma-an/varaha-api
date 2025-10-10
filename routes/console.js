@@ -242,19 +242,49 @@ router.post('/save-console', async (req, res) => {
 
     connection = await mysql.createConnection(dbConfig);
 
-    // Insert console record with Asia/Calcutta timezone
+    // Check if console record exists for this CRO
+    const [existingConsole] = await connection.execute(`
+      SELECT con_id FROM console WHERE c_p_cro = ?
+    `, [cro]);
+
     const currentDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Calcutta' });
-    await connection.execute(`
-      INSERT INTO console (
-        c_p_cro, start_time, stop_time, status, examination_id,
+
+    if (existingConsole.length > 0) {
+      // Update existing console record
+      await connection.execute(`
+        UPDATE console SET
+          start_time = ?, stop_time = ?, status = ?, examination_id = ?,
+          number_scan = ?, number_films = ?, number_contrast = ?, technician_name = ?,
+          nursing_name = ?, issue_cd = ?, remark = ?, added_on = ?
+        WHERE c_p_cro = ?
+      `, [
+        start_time, stop_time, status, examination_id,
         number_scan, number_film, number_contrast, technician_name,
-        nursing_name, issue_cd, remark, added_on
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      cro, start_time, stop_time, status, examination_id,
-      number_scan, number_film, number_contrast, technician_name,
-      nursing_name, issue_cd, remark, currentDate
-    ]);
+        nursing_name, issue_cd, remark, currentDate, cro
+      ]);
+    } else {
+      // Insert new console record
+      await connection.execute(`
+        INSERT INTO console (
+          c_p_cro, start_time, stop_time, status, examination_id,
+          number_scan, number_films, number_contrast, technician_name,
+          nursing_name, issue_cd, remark, added_on
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        cro, start_time, stop_time, status, examination_id,
+        number_scan, number_film, number_contrast, technician_name,
+        nursing_name, issue_cd, remark, currentDate
+      ]);
+    }
+
+    // Update examination_id in patient_new table
+    if (examination_id) {
+      await connection.execute(`
+        UPDATE patient_new 
+        SET examination_id = ? 
+        WHERE cro = ?
+      `, [examination_id, cro]);
+    }
 
     res.json({
       success: true,
