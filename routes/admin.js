@@ -935,14 +935,9 @@ router.get('/patient-list', async (req, res) => {
     let queryParams = [];
     
     if (from_date && to_date) {
-      // Convert yyyy-mm-dd to dd-mm-yyyy format for database comparison
-      const fromParts = from_date.split('-');
-      const toParts = to_date.split('-');
-      const fromDateFormatted = `${fromParts[2]}-${fromParts[1]}-${fromParts[0]}`;
-      const toDateFormatted = `${toParts[2]}-${toParts[1]}-${toParts[0]}`;
-      
+      // Dates are already in dd-mm-yyyy format from frontend
       whereClause = 'WHERE STR_TO_DATE(patient_new.date, "%d-%m-%Y") BETWEEN STR_TO_DATE(?, "%d-%m-%Y") AND STR_TO_DATE(?, "%d-%m-%Y")';
-      queryParams = [fromDateFormatted, toDateFormatted];
+      queryParams = [from_date, to_date];
     } else {
       // Default to today's date
       const now = new Date();
