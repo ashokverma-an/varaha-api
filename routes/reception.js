@@ -367,11 +367,9 @@ router.get('/patients/list', async (req, res) => {
     let query, params;
     
     if (from && to) {
-      // Convert yyyy-mm-dd to dd-mm-yyyy format for database
-      const fromParts = from.split('-');
-      const toParts = to.split('-');
-      const fromDate = `${fromParts[2]}-${fromParts[1]}-${fromParts[0]}`;
-      const toDate = `${toParts[2]}-${toParts[1]}-${toParts[0]}`;
+      // Convert dd-mm-yyyy to dd-mm-yyyy format for database (dates are already in correct format)
+      const fromDate = from;
+      const toDate = to;
       
       query = `
         SELECT p.*, h.h_name, d.dname 
@@ -1666,68 +1664,41 @@ router.get('/reports/doctor', async (req, res) => {
     const sqlStartDate = convertDate(startDate);
     const sqlEndDate = convertDate(endDate);
     
-    // Get all doctors
-    const [doctors] = await connection.execute('SELECT * FROM doctor ORDER BY dname');
+    // Single optimized query instead of loop
+    const [reportData] = await connection.execute(`
+      SELECT 
+        d.dname as doctorName,
+        COUNT(*) as totalScans,
+        SUM(CASE WHEN p.category = 'GEN' THEN 1 ELSE 0 END) as paidPatients,
+        SUM(CASE WHEN p.category <> 'GEN' THEN 1 ELSE 0 END) as freePatients,
+        SUM(p.amount) as totalRevenue
+      FROM patient_new p
+      JOIN console c ON c.c_p_cro = p.cro 
+      JOIN doctor d ON d.d_id = p.doctor_name
+      WHERE c.added_on BETWEEN ? AND ?
+      GROUP BY p.doctor_name, d.dname
+      HAVING totalScans > 0
+      ORDER BY d.dname
+    `, [sqlStartDate, sqlEndDate]);
     
-    const reportData = [];
-    let serialNo = 1;
-    
-    for (const doctor of doctors) {
-      // Total scans for this doctor
-      const [totalScans] = await connection.execute(`
-        SELECT COUNT(*) as count 
-        FROM patient_new 
-        JOIN console ON console.c_p_cro = patient_new.cro 
-        WHERE doctor_name = ? AND console.added_on BETWEEN ? AND ?
-      `, [doctor.d_id, sqlStartDate, sqlEndDate]);
-      
-      // Paid patients (GEN category)
-      const [paidPatients] = await connection.execute(`
-        SELECT COUNT(*) as count 
-        FROM patient_new 
-        JOIN console ON console.c_p_cro = patient_new.cro 
-        WHERE doctor_name = ? AND category = 'GEN' AND console.added_on BETWEEN ? AND ?
-      `, [doctor.d_id, sqlStartDate, sqlEndDate]);
-      
-      // Free patients (non-GEN category)
-      const [freePatients] = await connection.execute(`
-        SELECT COUNT(*) as count 
-        FROM patient_new 
-        JOIN console ON console.c_p_cro = patient_new.cro 
-        WHERE doctor_name = ? AND category <> 'GEN' AND console.added_on BETWEEN ? AND ?
-      `, [doctor.d_id, sqlStartDate, sqlEndDate]);
-      
-      // Total revenue
-      const [revenue] = await connection.execute(`
-        SELECT SUM(patient_new.amount) as total 
-        FROM patient_new 
-        JOIN console ON console.c_p_cro = patient_new.cro 
-        WHERE doctor_name = ? AND console.added_on BETWEEN ? AND ?
-      `, [doctor.d_id, sqlStartDate, sqlEndDate]);
-      
-      const totalScanCount = totalScans[0].count;
-      
-      // Only include doctors with scans
-      if (totalScanCount > 0) {
-        reportData.push({
-          sno: serialNo++,
-          doctorName: doctor.dname,
-          totalScans: totalScanCount,
-          paidPatients: paidPatients[0].count,
-          freePatients: freePatients[0].count,
-          totalRevenue: revenue[0].total || 0
-        });
-      }
-    }
+    // Add serial numbers and ensure numeric values
+    const formattedData = reportData.map((row, index) => ({
+      sno: index + 1,
+      doctorName: row.doctorName,
+      totalScans: parseInt(row.totalScans) || 0,
+      paidPatients: parseInt(row.paidPatients) || 0,
+      freePatients: parseInt(row.freePatients) || 0,
+      totalRevenue: parseFloat(row.totalRevenue) || 0
+    }));
     
     res.json({
       success: true,
-      data: reportData,
+      data: formattedData,
       dateRange: {
         startDate,
         endDate
       },
-      total: reportData.length
+      total: formattedData.length
     });
     
   } catch (error) {

@@ -134,8 +134,8 @@ router.get('/patient/:cro', async (req, res) => {
     const currentDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Calcutta' });
     const [consoleData] = await connection.execute(`
       SELECT * FROM console 
-      WHERE con_id = (SELECT MAX(con_id) FROM console WHERE added_on = ?)
-    `, [currentDate]);
+       WHERE added_on = ? and c_p_cro = ?
+    `, [currentDate, cro]);
 
     res.json({
       success: true,
@@ -277,14 +277,12 @@ router.post('/save-console', async (req, res) => {
       ]);
     }
 
-    // Update examination_id in patient_new table
-    if (examination_id) {
-      await connection.execute(`
-        UPDATE patient_new 
-        SET examination_id = ? 
-        WHERE cro = ?
-      `, [examination_id, cro]);
-    }
+    // Update examination_id and scan_date in patient_new table
+    await connection.execute(`
+      UPDATE patient_new 
+      SET examination_id = ?, scan_date = ? 
+      WHERE cro = ?
+    `, [examination_id || null, currentDate, cro]);
 
     res.json({
       success: true,

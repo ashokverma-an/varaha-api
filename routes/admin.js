@@ -142,7 +142,7 @@ async function generateDetailReport(connection, scanDate, selectedDate) {
     SELECT category, scan_type, hospital_id, CONCAT(category, hospital_id) as ch    
     FROM patient_new 
     WHERE scan_date = ? AND scan_status = 1 AND hospital_id IN (11) AND category != 'Sn. CITIZEN' 
-    GROUP BY hospital_id, scan_type  
+    GROUP BY hospital_id, category, scan_type  
     ORDER BY hospital_id ASC, 
              FIELD(category,'RTA','OPD FREE','IPD FREE','Chiranjeevi', 'RGHS','Destitute', 'PRISONER') ASC,  
              LENGTH(scan_type) DESC
@@ -187,6 +187,7 @@ async function generateDetailReport(connection, scanDate, selectedDate) {
              LENGTH(scan_type) DESC
   `, [scanDate]);
   
+  // PHP creates separate table for each category+scan_type combination (no duplicate prevention)
   for (const group of otherPrivateGroups) {
     const tableData = await generateTableForGroup(connection, group, scanDate, selectedDate, 'OTHER HOSPITAL');
     reportData.push(tableData);
@@ -240,6 +241,9 @@ async function generateTableForGroup(connection, group, scanDate, selectedDate, 
   if (group.hospital_id && !customHospitalName) {
     patientQuery += ' AND hospital_id = ?';
     queryParams.push(group.hospital_id);
+  } else if (customHospitalName === 'OTHER HOSPITAL') {
+    // For OTHER HOSPITAL, filter by the specific hospital IDs
+    patientQuery += ' AND hospital_id IN (14,16)';
   }
   
   patientQuery += ' ORDER BY category, patient_id';
@@ -1971,7 +1975,7 @@ router.get('/paid-patients', async (req, res) => {
       success: true,
       tot_patient: parseInt(result.tot_patient) || 0,
       tot_scan: parseInt(result.tot_scan) || 0,
-      tot_amt: parseFloat((result.tot_amt || 0).toFixed(2)),
+      tot_amt: parseFloat(parseFloat(result.tot_amt || 0).toFixed(2)),
       date: s_date
     });
 
