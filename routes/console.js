@@ -237,7 +237,8 @@ router.post('/save-console', async (req, res) => {
       technician_name,
       nursing_name,
       issue_cd,
-      remark
+      remark,
+      scan_status
     } = req.body;
 
     connection = await mysql.createConnection(dbConfig);
@@ -277,12 +278,13 @@ router.post('/save-console', async (req, res) => {
       ]);
     }
 
-    // Update examination_id and scan_date in patient_new table
+    // Update examination_id, scan_date and scan_status in patient_new table
+    const scanStatusValue = scan_status && [1, 2, 3].includes(parseInt(scan_status)) ? parseInt(scan_status) : 1;
     await connection.execute(`
       UPDATE patient_new 
-      SET examination_id = ?, scan_date = ? 
+      SET examination_id = ?, scan_date = ?, scan_status = ? 
       WHERE cro = ?
-    `, [examination_id || null, currentDate, cro]);
+    `, [examination_id || null, currentDate, scanStatusValue, cro]);
 
     res.json({
       success: true,

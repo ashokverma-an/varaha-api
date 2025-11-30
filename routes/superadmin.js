@@ -624,7 +624,7 @@ router.get('/patient-report', async (req, res) => {
           patient_new.patient_id as p_id,
           patient_new.cro as cro_number,
           patient_new.patient_name,
-          COALESCE(doctor.dname, doctor.doctor_name, 'Unknown Doctor') as dname,
+          COALESCE(doctor.dname,'') as dname,
           hospital.h_name as h_name,
           COALESCE(patient_new.amount, 0) as amount,
           '' as remark,
